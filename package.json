@@ -1,0 +1,39 @@
+{
+  "name": "scha-service",
+  "version": "0.0.1",
+  "license": "NO LICENSE",
+  "description": "Scha service with dump leecher.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dashdots/scha-service.git"
+  },
+  "author": "dashdot",
+  "dependencies": {
+    "bignumber.js": "^2.4.0",
+    "command-line-args": "^3.0.1",
+    "command-line-usage": "^3.0.3",
+    "download": "^5.0.2",
+    "html-entities": "^1.2.0",
+    "keymirror": "^0.1.1",
+    "lockfile": "^1.0.1",
+    "mmmagic": "^0.4.5",
+    "moment": "^2.11.2",
+    "progress": "^1.1.8",
+    "string-hash": "^1.1.0"
+  },
+  "scha.builder": {
+    "resourceDirs": [
+      "lib/Executor/public"
+    ]
+  },
+  "devDependencies": {
+    "babel-runtime": "^6.3.19",
+    "babel-polyfill": "^6.3.14",
+    "source-map-support": "^0.4.2",
+    "bluebird": "^3.2.2"
+  }
+}
