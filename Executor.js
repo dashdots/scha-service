@@ -40,7 +40,13 @@ class Executor extends ExecutorBase {
   get idle() {return this._idle;}
 
   run() {
-
+    if(!this._initialized || this._waitForExit) {
+      return;
+    }
+    if(this._taskPool.idle) {
+      this.emit(ExecutorEvent.running);
+      this._taskPool.run();
+    }
   }
 
   initialize({identifier, task:{invokerLimit=1, factory}={}}) {
