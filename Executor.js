@@ -3,6 +3,9 @@ import ExitCodes from './lib/ExitCodes';
 import TaskPool from './lib/TaskPool';
 import ExecutorEvent from './lib/ExecutorEvent';
 import Progress from './lib/Progress';
+import Task from './lib/Task';
+import TaskFactory from './lib/TaskFactory';
+import TaskType from './lib/TaskType';
 
 class Executor extends ExecutorBase {
 
@@ -70,12 +73,16 @@ class Executor extends ExecutorBase {
       this._cleanExit();
     }
   }
-  _forceExit() {
-    process.exit();
+
+  _forceExit({code=ExitCodes.FORCE_EXIT}={}) {
+    if(this._childs) {
+      this._childs.exit({code, force:true});
+    }
+    process.exit(code);
   }
 
-  _cleanExit() {
 
+  _cleanExit({code=ExitCodes.SUCCESS}={}) {
     if(this._waitForDispose) {
       return;
     }
@@ -84,7 +91,20 @@ class Executor extends ExecutorBase {
       return;
     }
 
-    process.exit();
+    if(!this._taskPool.idle) {
+      this._taskPool.stop();
+      return;
+    }
+
+    this._waitForDispose = true;
+    const resolve = ()=>{
+      process.exit(code);
+    };
+    if(this.listenerCount(ExecutorEvent.dispose) === 0) {
+      resolve();
+    } else {
+      this.emit({event:ExecutorEvent.dispose, data:resolve});
+    }
   }
 
   get progress() {
@@ -95,4 +115,13 @@ class Executor extends ExecutorBase {
 }
 
 
-export default Executor;
+export default new Executor();
+
+export {
+  Task,
+  TaskType,
+  TaskFactory,
+  ExitCodes,
+  ExecutorBase,
+  ExecutorEvent
+};
