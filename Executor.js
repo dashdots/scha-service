@@ -69,7 +69,10 @@ class Executor extends ExecutorBase {
         throw new Error(`task invoker limit cannot be \`${invokerLimit}\``);
       }
 
-      this._taskPool = new TaskPool({invokerLimit, factory});
+      const taskPool = this._taskPool = new TaskPool({invokerLimit, factory});
+      taskPool.on(TaskPool.Events.progress, ::this._onTaskProgress);
+      taskPool.on(TaskPool.Events.idle, ::this._onTaskIdle);
+      taskPool.on(TaskPool.Events.running, ::this._onTaskRunning);
 
       if(ParentRemoteExecutor.isParentExist()) {
         this._parent = new ParentRemoteExecutor({child:this});
@@ -93,6 +96,23 @@ class Executor extends ExecutorBase {
     this._initialized = true;
     this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
     callback();
+  }
+
+  _onTaskProgress(sender, progress) {
+    const totalProgress = new Progress(progress);
+    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
+  }
+
+  _onTaskIdle() {
+    if(!this._childs || this._childs.idle) {
+      this._idle = true;
+      this.emit({event:ExecutorEvent.idle, callParent:true});
+    }
+  }
+
+  _onTaskRunning() {
+    this._idle = false;
+    this.emit({event:ExecutorEvent.running, callParent:true});
   }
 
   exit({force=false}={}) {
