@@ -6,6 +6,8 @@ import Progress from './lib/Progress';
 import Task from './lib/Task';
 import TaskFactory from './lib/TaskFactory';
 import TaskType from './lib/TaskType';
+import ParentRemoteExecutor from './lib/ParentRemoteExecutor';
+import ChildRemoteExecutorPool from './lib/ChildRemoteExecutorPool';
 
 class Executor extends ExecutorBase {
 
@@ -52,18 +54,45 @@ class Executor extends ExecutorBase {
     }
   }
 
-  initialize({identifier, task:{invokerLimit=1, factory}={}}) {
+  initialize({identifier, dashboard:{port=5151}={}, task:{invokerLimit=1, factory}={}, child:{limit, paramsGenerator, params, modulePath}={}}, callback) {
+
     super.identifier = identifier;
-    if(!this._identifier) {
-      throw new Error('`identifier` must be specified');
+    let err;
+    try {
+      if(!this._identifier) {
+        throw new Error('`identifier` must be specified');
+      }
+      if(!factory) {
+        throw new Error('task factory must be specified');
+      }
+      if(invokerLimit<1) {
+        throw new Error(`task invoker limit cannot be \`${invokerLimit}\``);
+      }
+
+      this._taskPool = new TaskPool({invokerLimit, factory});
+
+      if(ParentRemoteExecutor.isParentExist()) {
+        this._parent = new ParentRemoteExecutor({child:this});
+      } else {
+        this._createSocketServer(port);
+      }
+
+      if(limit > 0 && modulePath) {
+        const childs = this._childs = new ChildRemoteExecutorPool({
+          limit,
+          params,
+          modulePath,
+          paramsGenerator
+        });
+      }
+
+    } catch(e) {
+      err = e;
     }
-    if(!factory) {
-      throw new Error('task factory must be specified');
-    }
-    if(invokerLimit<1) {
-      throw new Error(`task invoker limit cannot be \`${invokerLimit}\``);
-    }
-    this._taskPool = new TaskPool({invokerLimit, factory});
+
+    this._initialized = true;
+    this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
+    callback();
   }
 
   exit({force=false}={}) {
