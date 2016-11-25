@@ -76,6 +76,9 @@ class Executor extends ExecutorBase {
 
       if(ParentRemoteExecutor.isParentExist()) {
         this._parent = new ParentRemoteExecutor({child:this});
+        // Receive parent process message
+        this._parent.on(ExecutorEvent.run, ::this._onParentExecutorCommandRun);
+        this._parent.on(ExecutorEvent.tasks, ::this._onParentExecutorCommandTasks);
       } else {
         this._createSocketServer(port);
       }
@@ -85,7 +88,12 @@ class Executor extends ExecutorBase {
           limit,
           params,
           modulePath,
-          paramsGenerator
+          paramsGenerator,
+          parentEnv: {
+            pid: this.id,
+                identifier: this.identifier,
+                track: this.track,
+          }
         });
       }
 
@@ -99,7 +107,11 @@ class Executor extends ExecutorBase {
   }
 
   _onTaskProgress(sender, progress) {
+    this.emit({event:ExecutorEvent.localProgress, data:progress, callParent:true});
     const totalProgress = new Progress(progress);
+    if(this._childs) {
+      totalProgress.increase(this._childs.progress);
+    }
     this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
   }
 
@@ -107,6 +119,9 @@ class Executor extends ExecutorBase {
     if(!this._childs || this._childs.idle) {
       this._idle = true;
       this.emit({event:ExecutorEvent.idle, callParent:true});
+      if(this._waitForExit) {
+        this._cleanExit();
+      }
     }
   }
 
@@ -115,11 +130,15 @@ class Executor extends ExecutorBase {
     this.emit({event:ExecutorEvent.running, callParent:true});
   }
 
-  exit({force=false}={}) {
+  exit({code, force=false}={}) {
     if(force) {
-      this._forceExit();
+      this._forceExit({code});
     } else {
-      this._cleanExit();
+      if(!this._waitForExit) {
+        this.emit({event:ExecutorEvent.exiting});
+      }
+      this._waitForExit = true;
+      this._cleanExit({code});
     }
   }
 
