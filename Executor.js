@@ -95,6 +95,11 @@ class Executor extends ExecutorBase {
                 track: this.track,
           }
         });
+
+        // Receive child process message
+        childs.on(ExecutorEvent.progress, ::this._onChildProgress);
+        childs.on(ExecutorEvent.exit, ::this._onChildExit);
+        childs.on(ExecutorEvent.idle, ::this._onChildIdle);
       }
 
     } catch(e) {
@@ -104,6 +109,24 @@ class Executor extends ExecutorBase {
     this._initialized = true;
     this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
     callback();
+  }
+
+
+  _onChildExit(sender, {child, code}) {
+    this._cleanExit();
+  }
+
+  _onChildProgress(sender, progress) {
+    const totalProgress = new Progress(progress);
+    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
+  }
+
+  _onChildIdle() {
+    if(this._taskPool.idle) {
+      this._idle = true;
+      this.emit({event:ExecutorEvent.idle, callParent:true});
+      this._cleanExit();
+    }
   }
 
   _onTaskProgress(sender, progress) {
