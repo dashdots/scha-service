@@ -106,27 +106,10 @@ class Executor extends ExecutorBase {
       err = e;
     }
 
-    this._initialized = true;
-    this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
-    callback();
-  }
-
-
-  _onChildExit(sender, {child, code}) {
-    this._cleanExit();
-  }
-
-  _onChildProgress(sender, progress) {
-    const totalProgress = new Progress(progress);
-    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
-  }
-
-  _onChildIdle() {
-    if(this._taskPool.idle) {
-      this._idle = true;
-      this.emit({event:ExecutorEvent.idle, callParent:true});
-      this._cleanExit();
-    }
+    return _promisifyCallback(callback, err, ()=>{
+      this._initialized = true;
+      this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
+    });
   }
 
   _onTaskProgress(sender, progress) {
@@ -152,6 +135,32 @@ class Executor extends ExecutorBase {
     this._idle = false;
     this.emit({event:ExecutorEvent.running, callParent:true});
   }
+
+
+  // region child event handlers
+  _onChildExit(sender, {child, code}) {
+    if(this._waitForExit && this._childs.count===0) {
+      this._cleanExit();
+    }
+  }
+
+  _onChildProgress(sender, progress) {
+    const totalProgress = new Progress(progress);
+    totalProgress.increase(this._taskPool.progress);
+    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
+  }
+
+  _onChildIdle() {
+    if(this._taskPool.idle) {
+      this._idle = true;
+      this.emit({event:ExecutorEvent.idle, callParent:true});
+
+      if(this._waitForExit) {
+        this._cleanExit();
+      }
+    }
+  }
+  // endregion
 
   exit({code, force=false}={}) {
     if(force) {
@@ -205,6 +214,28 @@ class Executor extends ExecutorBase {
   }
 }
 
+/**
+ * Promisify callback with error & done
+ * @param {?Function} callback
+ * @param {?Function} err
+ * @param {Function}done
+ * @returns {Promise}
+ */
+function _promisifyCallback(callback, err, done) {
+  if(callback && typeof(callback)!=='function') {
+    throw new TypeError('callback should be function');
+  }
+
+  if(err && !callback) {
+    return Promise.reject(err);
+  }
+
+  let promise = Promise.resolve(callback && callback.apply(undefined, err));
+  if(!err) {
+    promise = promise.then(done);
+  }
+  return promise;
+}
 
 export default new Executor();
 
