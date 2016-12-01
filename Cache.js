@@ -1,17 +1,36 @@
 import {TASK_DB, DUMP_DB, DATA_DB, TEMP_DB} from './configure';
 import cacheDB from 'scha.service/lib/actions/cacheDB';
 
+/**
+ * get a directly cacheDB instance
+ * @param {Number} db
+ */
 export function getCache(db=0) {return cacheDB(db);}
 
+/**
+ * Cache for Scha service
+ */
 export default class Cache {
+  /**
+   * get dump db instance
+   * @return {CacheDB}
+   */
   static get dumpDB() {
     return cacheDB(DUMP_DB);
   }
 
+  /**
+   * get data db instance
+   * @return {CacheDB}
+   */
   static get dataDB() {
     return cacheDB(DATA_DB);
   }
 
+  /**
+   * get task db instance
+   * @return {CacheDB}
+   */
   static get taskDB() {
     if(!this._taskDB) {
       this._taskDB = cacheDB(TASK_DB);
@@ -19,6 +38,10 @@ export default class Cache {
     return this._taskDB;
   }
 
+  /**
+   * get temp db instance
+   * @return {CacheDB}
+   */
   static get tempDB() {
     return cacheDB(TEMP_DB);
   }
