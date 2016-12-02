@@ -45,4 +45,12 @@ export default class Cache {
   static get tempDB() {
     return cacheDB(TEMP_DB);
   }
+
+  static get dumpCmd() { return this.dumpDB.multi(); }
+
+  static get dataCmd() { return this.dataDB.multi(); }
+
+  static get taskCmd() { return this.taskDB.multi(); }
+
+  static get tempCmd() { return this.tempDB.multi(); }
 }
