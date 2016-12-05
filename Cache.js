@@ -53,4 +53,12 @@ export default class Cache {
   static get taskCmd() { return this.taskDB.multi(); }
 
   static get tempCmd() { return this.tempDB.multi(); }
+
+  static async _runCmd(db, cmd, cb) {
+    const execNow = !cmd;
+    if(execNow) {
+      cmd = db.multi();
+    }
+    await cb(cmd);
+  }
 }

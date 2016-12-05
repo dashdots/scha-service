@@ -17,6 +17,7 @@ class Executor extends ExecutorBase {
   _taskPool;
   _idle = true;
   _initialized = false;
+  _waitForExit = false;
 
   _onSIGINT() {
     this.exit({force:this._waitForExit});
@@ -43,6 +44,15 @@ class Executor extends ExecutorBase {
   get childs() { return this._childs; }
   get identifier() {return super.identifier;}
   get idle() {return this._idle;}
+
+
+  set track(value) {super.track = value;}
+  get track() {
+    let trackCombined = [];
+    const track = super.track;
+    trackCombined.push({identifier:this.identifier, pid:this.id});
+    return trackCombined;
+  }
 
   run() {
     if(!this._initialized || this._waitForExit) {
