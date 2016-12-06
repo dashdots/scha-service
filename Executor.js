@@ -8,6 +8,8 @@ import TaskFactory from './lib/TaskFactory';
 import TaskType from './lib/TaskType';
 import ParentRemoteExecutor from './lib/ParentRemoteExecutor';
 import ChildRemoteExecutorPool from './lib/ChildRemoteExecutorPool';
+import webSocket from 'socket.io';
+import webSocketClient from 'socket.io-client';
 
 class Executor extends ExecutorBase {
 
@@ -49,7 +51,15 @@ class Executor extends ExecutorBase {
   set track(value) {super.track = value;}
   get track() {
     let trackCombined = [];
+    if(this._parent) {
+      trackCombined = trackCombined.concat(this._parent.track);
+    }
     const track = super.track;
+    if(track && Array.isArray(track)) {
+      trackCombined = trackCombined.concat(track);
+    } else {
+      trackCombined.push(track);
+    }
     trackCombined.push({identifier:this.identifier, pid:this.id});
     return trackCombined;
   }
@@ -111,6 +121,16 @@ class Executor extends ExecutorBase {
         childs.on(ExecutorEvent.exit, ::this._onChildExit);
         childs.on(ExecutorEvent.idle, ::this._onChildIdle);
       }
+
+
+      const io = this._io = webSocketClient.connect(`http://127.0.0.1:${Environment.socketPort}`, {reconnect: true});
+
+      io.on(SocketEvent.peer, ({id, event, data}={})=>{    // client -> [server -> client]
+        if(id === this.id) {
+          this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
+        }
+      })
+
 
     } catch(e) {
       err = e;
