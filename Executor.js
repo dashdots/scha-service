@@ -161,6 +161,26 @@ class Executor extends ExecutorBase {
     }
   }
 
+  _emitSocket({sender, event, data}) {
+    if(!sender) {
+      sender = this;
+    }
+
+    try {
+      this._io.emit(SocketEvent.broadcast, {
+        identifier: sender.identifier,
+        id: sender.id,
+        uuid: Environment.uuid,
+        progress: this.progress.toJSON(),
+        track: sender.track,
+        event,
+        data
+      });
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
   _onTaskRunning() {
     this._idle = false;
     this.emit({event:ExecutorEvent.running, callParent:true});
@@ -266,6 +286,19 @@ function _promisifyCallback(callback, err, done) {
   }
   return promise;
 }
+
+const SocketEvent = {
+  listening:'listening',
+  connected:'connected',
+  connection:'connection',
+  disconnect:'disconnect',
+  error:'error',
+  message:'message',
+  broadcast:'broadcast',
+  peer:'peer',
+  report:'report',
+  status:'status',
+};
 
 export default new Executor();
 
