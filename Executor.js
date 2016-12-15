@@ -170,9 +170,13 @@ class Executor extends ExecutorBase {
       this._io.emit(SocketEvent.broadcast, {
         identifier: sender.identifier,
         id: sender.id,
+        track: sender.track,
+        parentId: this._parent ? this._parent.id : null,
         uuid: Environment.uuid,
         progress: this.progress.toJSON(),
-        track: sender.track,
+        localProgress: this._taskPool.progress.toJSON(),
+        idle: this._idle,
+        childs: this._childs ? this._childs.ids : [],
         event,
         data
       });
