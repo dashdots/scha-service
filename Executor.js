@@ -130,7 +130,11 @@ class Executor extends ExecutorBase {
           this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
         }
       })
-
+      io.on(SocketEvent.peer, ({id, event, data}={})=>{    // client -> [server -> client]
+        if(id === this.id) {
+          this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
+        }
+      })
 
     } catch(e) {
       err = e;
