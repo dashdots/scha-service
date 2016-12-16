@@ -64,12 +64,25 @@ class Executor extends ExecutorBase {
     return trackCombined;
   }
 
+  dispatchTasks(type, tasks=[]) {
+    if(type === TaskType.Local) {
+      this._taskPool.loadTasks(tasks);
+    } else if(type === TaskType.Remote) {
+      if(!this._childs) {
+        throw new Error('there\'s no remote child to handle remote tasks because child limit is 0')
+      }
+      this._childs.dispatchTasks(tasks);
+    } else {
+      throw new Error(`unknown task type: \`${type}\``);
+    }
+  }
+
   run() {
     if(!this._initialized || this._waitForExit) {
       return;
     }
     if(this._taskPool.idle) {
-      this.emit(ExecutorEvent.running);
+      // this.emit(ExecutorEvent.running);
       this._taskPool.run();
     }
   }
