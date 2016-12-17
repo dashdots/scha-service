@@ -288,6 +288,20 @@ class Executor extends ExecutorBase {
   emit({event, data, callParent=false, sendSocket=true}) {
     super.emit(event, data);
 
+    if(sendSocket || callParent) {
+      if(typeof(data)==='function') {
+        data = util.format(data);
+      }
+
+      if(data && typeof(data)==='object' && !Array.isArray(data) && data.constructor!==Object) {
+        if(data.toJSON) {
+          data = data.toJSON();
+        } else {
+          data = util.format(data);
+        }
+      }
+    }
+
     if(callParent) {
       this._remoteCallParent({event, data});
     }
