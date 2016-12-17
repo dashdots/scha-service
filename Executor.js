@@ -283,6 +283,19 @@ class Executor extends ExecutorBase {
         ? Progress.merge(this._taskPool.progress, this._childs.progress)
         : this._taskPool.progress;
   }
+
+
+  emit({event, data, callParent=false, sendSocket=true}) {
+    super.emit(event, data);
+
+    if(callParent) {
+      this._remoteCallParent({event, data});
+    }
+
+    if(sendSocket) {
+      this._emitSocket({sender:this, event, data})
+    }
+  }
 }
 
 /**
