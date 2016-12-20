@@ -178,6 +178,26 @@ class Executor extends ExecutorBase {
     }
   }
 
+  emitSocket({event, data}) {
+    try {
+      this._io.emit(SocketEvent.broadcast, {
+        identifier: this.identifier,
+        id: this.id,
+        track: this.track,
+        parentId: this._parent ? this._parent.id : null,
+        uuid: Environment.uuid,
+        progress: this.progress.toJSON(),
+        localProgress: this._taskPool.progress.toJSON(),
+        idle: this._idle,
+        childs: this._childs ? this._childs.ids : [],
+        event,
+        data
+      });
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
   _emitSocket({sender, event, data}) {
     if(!sender) {
       sender = this;
