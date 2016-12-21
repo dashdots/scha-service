@@ -330,6 +330,12 @@ class Executor extends ExecutorBase {
       this._emitSocket({sender:this, event, data})
     }
   }
+
+  _remoteCallParent({event, data}) {
+    if(this._parent) {
+      this.remoteCall({target:this._parent, event, data});
+    }
+  }
 }
 
 /**
