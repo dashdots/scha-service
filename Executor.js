@@ -159,6 +159,11 @@ class Executor extends ExecutorBase {
     });
   }
 
+  // region parent event handlers
+  _onParentExecutorCommandTasks(sender, {type, tasks}) { this.dispatchTasks(type, tasks); }
+  _onParentExecutorCommandRun() { this.run(); }
+  // endregion
+
   _onTaskProgress(sender, progress) {
     this.emit({event:ExecutorEvent.localProgress, data:progress, callParent:true});
     const totalProgress = new Progress(progress);
