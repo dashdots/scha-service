@@ -10,6 +10,9 @@ import ParentRemoteExecutor from './lib/ParentRemoteExecutor';
 import ChildRemoteExecutorPool from './lib/ChildRemoteExecutorPool';
 import webSocket from 'socket.io';
 import webSocketClient from 'socket.io-client';
+import express from 'express';
+import util from 'util';
+import Environment from './lib/Environment';
 
 class Executor extends ExecutorBase {
 
@@ -30,6 +33,7 @@ class Executor extends ExecutorBase {
   }
 
   _onUncaughtException(err) {
+    console.error(err);
     this.emit({event:ExecutorEvent.error, data:err});
     this._forceExit({code:ExitCodes.FATAL});
   }
@@ -340,6 +344,48 @@ class Executor extends ExecutorBase {
     if(this._parent) {
       this.remoteCall({target:this._parent, event, data});
     }
+  }
+
+
+  _createSocketServer(port) {
+    Environment.socketPort = port;
+    const dashboard = express();
+    const server = http.createServer(dashboard);
+    const io = webSocket(server);
+    io.on(SocketEvent.connection, client=>{
+      this._onSocketConnected(client);
+
+      io.emit(SocketEvent.status, {
+        uuid: Environment.uuid,
+      });  // server ->> client : status
+
+      client.emit(SocketEvent.message, {
+        identifier: this.identifier,
+        id: this.id,
+        track: this.track,
+        event: SocketEvent.report,
+      });
+
+    });
+    io.on(SocketEvent.error, error=>{
+      this._onSocketError(error)
+    });
+    server.listen(port, ()=>{
+      this._onServerListening()
+    });
+    dashboard.use(express.static(path.join(__dirname, '../../../public')));
+  }
+
+  _onServerListening() {
+    console.log('socket:listening');
+  }
+  _onSocketConnected(client) {
+    console.log('socket:connected');
+  }
+  _onSocketError(error) {
+    console.error(error);
+  }
+  _onSocketDisconnect(client, data) {
   }
 }
 
