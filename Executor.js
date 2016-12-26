@@ -366,6 +366,18 @@ class Executor extends ExecutorBase {
         event: SocketEvent.report,
       });
 
+      client.on(SocketEvent.message, dataPacket=>{
+        if(dataPacket && typeof(dataPacket)==='object' && dataPacket.event) {
+          const {event, data} = dataPacket;
+          //this._onSocketEvent(client, event, data);
+        }
+      });
+
+      client.on(SocketEvent.peer, dataPacket=>{  // client -> server: peer
+        if(dataPacket && typeof(dataPacket)==='object' && dataPacket.id && dataPacket.event) {
+          io.emit(SocketEvent.peer, dataPacket);
+        }
+      });
     });
     io.on(SocketEvent.error, error=>{
       this._onSocketError(error)
