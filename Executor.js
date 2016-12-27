@@ -346,7 +346,6 @@ class Executor extends ExecutorBase {
     }
   }
 
-
   _createSocketServer(port) {
     Environment.socketPort = port;
     const dashboard = express();
@@ -359,24 +358,18 @@ class Executor extends ExecutorBase {
         uuid: Environment.uuid,
       });  // server ->> client : status
 
-      client.emit(SocketEvent.message, {
-        identifier: this.identifier,
-        id: this.id,
-        track: this.track,
-        event: SocketEvent.report,
-      });
-
-      client.on(SocketEvent.message, dataPacket=>{
-        if(dataPacket && typeof(dataPacket)==='object' && dataPacket.event) {
-          const {event, data} = dataPacket;
-          //this._onSocketEvent(client, event, data);
-        }
-      });
-
       client.on(SocketEvent.peer, dataPacket=>{  // client -> server: peer
         if(dataPacket && typeof(dataPacket)==='object' && dataPacket.id && dataPacket.event) {
           io.emit(SocketEvent.peer, dataPacket);
         }
+      });
+
+      client.on(SocketEvent.broadcast, dataPacket=>{
+        io.emit(SocketEvent.message, dataPacket);
+      });
+
+      client.on(SocketEvent.disconnect, data=>{
+        this._onSocketDisconnect(client, data);
       });
     });
     io.on(SocketEvent.error, error=>{
