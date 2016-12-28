@@ -1,6 +1,6 @@
 {
   "name": "scha-service",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "NO LICENSE",
   "description": "Scha service with dump leecher.",
   "main": "index.js",

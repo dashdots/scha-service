@@ -1,29 +1,72 @@
-import ExecutorBase from './lib/ExecutorBase';
 import ExitCodes from './lib/ExitCodes';
+import ExecutorBase from './lib/ExecutorBase';
 import TaskPool from './lib/TaskPool';
-import ExecutorEvent from './lib/ExecutorEvent';
-import Progress from './lib/Progress';
 import Task from './lib/Task';
-import TaskFactory from './lib/TaskFactory';
-import TaskType from './lib/TaskType';
+import Progress from './lib/Progress';
 import ParentRemoteExecutor from './lib/ParentRemoteExecutor';
 import ChildRemoteExecutorPool from './lib/ChildRemoteExecutorPool';
+import TaskFactory from './lib/TaskFactory';
+import TaskType from './lib/TaskType';
+import ExecutorEvent from './lib/ExecutorEvent';
+import Environment from './lib/Environment';
+import http from 'http';
+import path from 'path';
 import webSocket from 'socket.io';
 import webSocketClient from 'socket.io-client';
 import express from 'express';
 import util from 'util';
-import Environment from './lib/Environment';
 
 class Executor extends ExecutorBase {
-
   _parent;
+
   _childs;
+
   _waitForDispose = false;
-  _taskPool;
-  _idle = true;
-  _initialized = false;
+
   _waitForExit = false;
 
+  _initialized = false;
+
+  _taskPool;
+
+  _io;
+
+  _idle = true;
+
+  constructor() {
+    super({executorProcess: process});
+    process.stdin.resume();
+    process.on('uncaughtException', ::this._onUncaughtException);
+    process.on('SIGINT', ::this._onSIGINT);
+    process.on('SIGTERM', ::this._onSIGTERM);
+
+  }
+
+  set track(value) {super.track = value;}
+  get track() {
+    let trackCombined = [];
+    if(this._parent) {
+      trackCombined = trackCombined.concat(this._parent.track);
+    }
+    const track = super.track;
+    if(track) {
+      if(Array.isArray(track)) {
+        trackCombined = trackCombined.concat(track);
+      } else {
+        trackCombined.push(track);
+      }
+    }
+    trackCombined.push({identifier:this.identifier, pid:this.id});
+    return trackCombined;
+  }
+
+  get parent() {return this._parent;}
+  get childs() { return this._childs; }
+  get identifier() {return super.identifier;}
+  set identifier(value) {throw new Error('readonly');}
+  get idle() {return this._idle;}
+
+  // region exit handlers
   _onSIGINT() {
     this.exit({force:this._waitForExit});
   }
@@ -38,136 +81,65 @@ class Executor extends ExecutorBase {
     this._forceExit({code:ExitCodes.FATAL});
   }
 
-  constructor() {
-    super({executorProcess: process});
-    process.stdin.resume();
-    process.on('SIGINT', ::this._onSIGINT);
-    process.on('SIGTERM', ::this._onSIGTERM);
-    process.on('uncaughtException', ::this._onUncaughtException);
+  _forceExit({code=ExitCodes.FORCE_EXIT}={}) {
+    if(this._childs) {
+      this._childs.exit({code, force:true});
+    }
+    process.exit(code);
   }
 
-  get parent() {return this._parent;}
-  get childs() { return this._childs; }
-  get identifier() {return super.identifier;}
-  get idle() {return this._idle;}
-
-
-  set track(value) {super.track = value;}
-  get track() {
-    let trackCombined = [];
-    if(this._parent) {
-      trackCombined = trackCombined.concat(this._parent.track);
-    }
-    const track = super.track;
-    if(track && Array.isArray(track)) {
-      trackCombined = trackCombined.concat(track);
-    } else {
-      trackCombined.push(track);
-    }
-    trackCombined.push({identifier:this.identifier, pid:this.id});
-    return trackCombined;
-  }
-
-  dispatchTasks(type, tasks=[]) {
-    if(type === TaskType.Local) {
-      this._taskPool.loadTasks(tasks);
-    } else if(type === TaskType.Remote) {
-      if(!this._childs) {
-        throw new Error('there\'s no remote child to handle remote tasks because child limit is 0')
-      }
-      this._childs.dispatchTasks(tasks);
-    } else {
-      throw new Error(`unknown task type: \`${type}\``);
-    }
-  }
-
-  run() {
-    if(!this._initialized || this._waitForExit) {
+  _cleanExit({code=ExitCodes.SUCCESS}={}) {
+    if(this._waitForDispose) {
       return;
     }
-    if(this._taskPool.idle) {
-      // this.emit(ExecutorEvent.running);
-      this._taskPool.run();
-    }
-  }
 
-  initialize({identifier, dashboard:{port=5151}={}, task:{invokerLimit=1, factory}={}, child:{limit, paramsGenerator, params, modulePath}={}}, callback) {
-
-    super.identifier = identifier;
-    let err;
-    try {
-      if(!this._identifier) {
-        throw new Error('`identifier` must be specified');
-      }
-      if(!factory) {
-        throw new Error('task factory must be specified');
-      }
-      if(invokerLimit<1) {
-        throw new Error(`task invoker limit cannot be \`${invokerLimit}\``);
-      }
-
-      const taskPool = this._taskPool = new TaskPool({invokerLimit, factory});
-      taskPool.on(TaskPool.Events.progress, ::this._onTaskProgress);
-      taskPool.on(TaskPool.Events.idle, ::this._onTaskIdle);
-      taskPool.on(TaskPool.Events.running, ::this._onTaskRunning);
-
-      if(ParentRemoteExecutor.isParentExist()) {
-        this._parent = new ParentRemoteExecutor({child:this});
-        // Receive parent process message
-        this._parent.on(ExecutorEvent.run, ::this._onParentExecutorCommandRun);
-        this._parent.on(ExecutorEvent.tasks, ::this._onParentExecutorCommandTasks);
-      } else {
-        this._createSocketServer(port);
-      }
-
-      if(limit > 0 && modulePath) {
-        const childs = this._childs = new ChildRemoteExecutorPool({
-          limit,
-          params,
-          modulePath,
-          paramsGenerator,
-          parentEnv: {
-            pid: this.id,
-                identifier: this.identifier,
-                track: this.track,
-          }
-        });
-
-        // Receive child process message
-        childs.on(ExecutorEvent.progress, ::this._onChildProgress);
-        childs.on(ExecutorEvent.exit, ::this._onChildExit);
-        childs.on(ExecutorEvent.idle, ::this._onChildIdle);
-      }
-
-
-      const io = this._io = webSocketClient.connect(`http://127.0.0.1:${Environment.socketPort}`, {reconnect: true});
-
-      io.on(SocketEvent.peer, ({id, event, data}={})=>{    // client -> [server -> client]
-        if(id === this.id) {
-          this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
-        }
-      })
-      io.on(SocketEvent.peer, ({id, event, data}={})=>{    // client -> [server -> client]
-        if(id === this.id) {
-          this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
-        }
-      })
-
-    } catch(e) {
-      err = e;
+    if(this._childs && this._childs.count!==0) {
+      return;
     }
 
-    return _promisifyCallback(callback, err, ()=>{
-      this._initialized = true;
-      this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
-    });
-  }
+    if(!this._taskPool.idle) {
+      this._taskPool.stop();
+      return;
+    }
 
-  // region parent event handlers
-  _onParentExecutorCommandTasks(sender, {type, tasks}) { this.dispatchTasks(type, tasks); }
-  _onParentExecutorCommandRun() { this.run(); }
+    this._waitForDispose = true;
+    const resolve = ()=>{
+      process.exit(code);
+    };
+    if(this.listenerCount(ExecutorEvent.dispose) === 0) {
+      resolve();
+    } else {
+      this.emit({event:ExecutorEvent.dispose, data:resolve});
+    }
+  }
   // endregion
 
+  // region child event handlers
+  _onChildExit(sender, {child, code}) {
+    if(this._waitForExit && this._childs.count===0) {
+      this._cleanExit();
+    }
+  }
+
+  _onChildProgress(sender, progress) {
+    const totalProgress = new Progress(progress);
+    totalProgress.increase(this._taskPool.progress);
+    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
+  }
+
+  _onChildIdle() {
+    if(this._taskPool.idle) {
+      this._idle = true;
+      this.emit({event:ExecutorEvent.idle, callParent:true});
+
+      if(this._waitForExit) {
+        this._cleanExit();
+      }
+    }
+  }
+  // endregion
+
+  // region task event handlers
   _onTaskProgress(sender, progress) {
     this.emit({event:ExecutorEvent.localProgress, data:progress, callParent:true});
     const totalProgress = new Progress(progress);
@@ -184,6 +156,24 @@ class Executor extends ExecutorBase {
       if(this._waitForExit) {
         this._cleanExit();
       }
+    }
+  }
+
+  _onTaskRunning() {
+    this._idle = false;
+    this.emit({event:ExecutorEvent.running, callParent:true});
+  }
+
+  // endregion
+
+  // region parent event handlers
+  _onParentExecutorCommandTasks(sender, {type, tasks}) { this.dispatchTasks(type, tasks); }
+  _onParentExecutorCommandRun() { this.run(); }
+  // endregion
+
+  _remoteCallParent({event, data}) {
+    if(this._parent) {
+      this.remoteCall({target:this._parent, event, data});
     }
   }
 
@@ -231,88 +221,11 @@ class Executor extends ExecutorBase {
     }
   }
 
-  _onTaskRunning() {
-    this._idle = false;
-    this.emit({event:ExecutorEvent.running, callParent:true});
-  }
-
-
-  // region child event handlers
-  _onChildExit(sender, {child, code}) {
-    if(this._waitForExit && this._childs.count===0) {
-      this._cleanExit();
-    }
-  }
-
-  _onChildProgress(sender, progress) {
-    const totalProgress = new Progress(progress);
-    totalProgress.increase(this._taskPool.progress);
-    this.emit({event:ExecutorEvent.progress, data:totalProgress, callParent:true});
-  }
-
-  _onChildIdle() {
-    if(this._taskPool.idle) {
-      this._idle = true;
-      this.emit({event:ExecutorEvent.idle, callParent:true});
-
-      if(this._waitForExit) {
-        this._cleanExit();
-      }
-    }
-  }
-  // endregion
-
-  exit({code, force=false}={}) {
-    if(force) {
-      this._forceExit({code});
-    } else {
-      if(!this._waitForExit) {
-        this.emit({event:ExecutorEvent.exiting});
-      }
-      this._waitForExit = true;
-      this._cleanExit({code});
-    }
-  }
-
-  _forceExit({code=ExitCodes.FORCE_EXIT}={}) {
-    if(this._childs) {
-      this._childs.exit({code, force:true});
-    }
-    process.exit(code);
-  }
-
-
-  _cleanExit({code=ExitCodes.SUCCESS}={}) {
-    if(this._waitForDispose) {
-      return;
-    }
-
-    if(this._childs && this._childs.count!==0) {
-      return;
-    }
-
-    if(!this._taskPool.idle) {
-      this._taskPool.stop();
-      return;
-    }
-
-    this._waitForDispose = true;
-    const resolve = ()=>{
-      process.exit(code);
-    };
-    if(this.listenerCount(ExecutorEvent.dispose) === 0) {
-      resolve();
-    } else {
-      this.emit({event:ExecutorEvent.dispose, data:resolve});
-    }
-  }
-
   get progress() {
     return this._childs
         ? Progress.merge(this._taskPool.progress, this._childs.progress)
         : this._taskPool.progress;
   }
-
 
   emit({event, data, callParent=false, sendSocket=true}) {
     super.emit(event, data);
@@ -340,9 +253,110 @@ class Executor extends ExecutorBase {
     }
   }
 
-  _remoteCallParent({event, data}) {
-    if(this._parent) {
-      this.remoteCall({target:this._parent, event, data});
+  dispatchTasks(type, tasks=[]) {
+    if(type === TaskType.Local) {
+      this._taskPool.loadTasks(tasks);
+    } else if(type === TaskType.Remote) {
+      if(!this._childs) {
+        throw new Error('there\'s no remote child to handle remote tasks because child limit is 0')
+      }
+      this._childs.dispatchTasks(tasks);
+    } else {
+      throw new Error(`unknown task type: \`${type}\``);
+    }
+  }
+
+  run() {
+    if(!this._initialized || this._waitForExit) {
+      return;
+    }
+
+    if(this._taskPool.idle) {
+      //this.emit(ExecutorEvent.running);
+      this._taskPool.run();
+    }
+  }
+
+  initialize({identifier, dashboard:{port=5151}={}, task:{invokerLimit=1, factory}={}, child:{limit, paramsGenerator, params, modulePath}={}}, callback) {
+
+    super.identifier = identifier;
+    let err;
+    try {
+      if(!this._identifier) {
+        throw new Error('`identifier` must be specified');
+      }
+      if(!factory) {
+        throw new Error('task factory must be specified');
+      }
+      if(invokerLimit<1) {
+        throw new Error(`task invoker limit cannot be \`${invokerLimit}\``);
+      }
+
+      const taskPool = this._taskPool = new TaskPool({invokerLimit, factory});
+      taskPool.on(TaskPool.Events.progress, ::this._onTaskProgress);
+      taskPool.on(TaskPool.Events.idle, ::this._onTaskIdle);
+      taskPool.on(TaskPool.Events.running, ::this._onTaskRunning);
+
+      if(ParentRemoteExecutor.isParentExist()) {
+        this._parent = new ParentRemoteExecutor({child:this});
+        // Receive parent process message
+        this._parent.on(ExecutorEvent.run, ::this._onParentExecutorCommandRun);
+        this._parent.on(ExecutorEvent.tasks, ::this._onParentExecutorCommandTasks);
+
+      } else {
+        this._createSocketServer(port);
+      }
+
+      if(limit > 0 && modulePath) {
+
+        const childs = this._childs = new ChildRemoteExecutorPool({
+          limit,
+          params,
+          modulePath,
+          paramsGenerator,
+          parentEnv: {
+            pid: this.id,
+            identifier: this.identifier,
+            track: this.track,
+          }
+        });
+
+        // Receive child process message
+        childs.on(ExecutorEvent.progress, ::this._onChildProgress);
+        childs.on(ExecutorEvent.exit, ::this._onChildExit);
+        childs.on(ExecutorEvent.idle, ::this._onChildIdle);
+      }
+
+
+      const io = this._io = webSocketClient.connect(`http://127.0.0.1:${Environment.socketPort}`, {reconnect: true});
+
+      io.on(SocketEvent.status, ()=>{   // server -> client: status
+        this._emitSocket({event:SocketEvent.status});
+      });
+      io.on(SocketEvent.peer, ({id, event, data}={})=>{    // client -> [server -> client]
+        if(id === this.id) {
+          this.emit({event:ExecutorEvent.peer, data: {event, data}, callParent:false, sendSocket:false});
+        }
+      })
+    } catch(e) {
+      err = e;
+    }
+
+    return _promisifyCallback(callback, err, ()=>{
+      this._initialized = true;
+      this.emit({event:ExecutorEvent.initialized, data:{identifier:this.identifier, track:this.track, id:this.id}, callParent:true});
+    });
+  }
+
+  exit({code, force=false}={}) {
+    if(force) {
+      this._forceExit({code});
+    } else {
+      if(!this._waitForExit) {
+        this.emit({event:ExecutorEvent.exiting});
+      }
+      this._waitForExit = true;
+      this._cleanExit({code});
     }
   }
 
@@ -357,6 +371,7 @@ class Executor extends ExecutorBase {
       io.emit(SocketEvent.status, {
         uuid: Environment.uuid,
       });  // server ->> client : status
+
 
       client.on(SocketEvent.peer, dataPacket=>{  // client -> server: peer
         if(dataPacket && typeof(dataPacket)==='object' && dataPacket.id && dataPacket.event) {
@@ -385,7 +400,7 @@ class Executor extends ExecutorBase {
     console.log('socket:listening');
   }
   _onSocketConnected(client) {
-    console.log('socket:connected');
+    //console.log('socket:connected');
   }
   _onSocketError(error) {
     console.error(error);
