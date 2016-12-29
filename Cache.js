@@ -61,4 +61,23 @@ export default class Cache {
     }
     await cb(cmd);
   }
+  static async runDumpCmd(cmd, cb) {
+    return await this._runCmd(this.dumpDB, cmd, cb);
+  }
+
+  static async runDataCmd(cmd, cb) {
+    return await this._runCmd(this.dataDB, cmd, cb);
+  }
+
+  static async runTaskCmd(cmd, cb) {
+    return await this._runCmd(this.taskDB, cmd, cb);
+  }
+
+  static async runProxyCmd(cmd, cb) {
+    return await this._runCmd(this.proxyDB, cmd, cb);
+  }
+
+  static async runTempCmd(cmd, cb) {
+    return await this._runCmd(this.tempDB, cmd, cb);
+  }
 }
