@@ -23,6 +23,16 @@ export default class LeecherCache {
      listContentType
      listLinkCount
      */
+    this.opts = {
+      leechStoreKey: `${leechType}:${name}`,
+      resourceKey: `RESOURCE:${name}`,
+      dumpIndexKey: `DUMP_INDEX:${name}`,
+      parsedKey: `PARSED:${name}`,
+      dumpKey: `DUMP:${name}`,
+      name,
+      listContentType,
+      listLinkCount
+    }
   }
 
   async getListCount() {
@@ -36,4 +46,20 @@ export default class LeecherCache {
   async loadListDump({page, lang}={}) { throw new Error();}
   async loadPageDump({pageId, lang}={}) { throw new Error();}
 
+  async getHashedIdsParsed(pageIds=[]) {
+    const dataCmd = Cache.dataCmd;
+    pageIds.forEach(pageId=>dataCmd.sismember(this.opts.parsedKey, pageId));
+    const rtn = await dataCmd.execAsync();
+    return rtn.map(x=>!!x);
+  }
+
+  async loadLeechResult(pageId) {
+    const parsed = await Cache.dataDB.hgetAsync(this.opts.leechStoreKey, pageId);
+    if(parsed) {
+      try {
+        return JSON.parse(parsed);
+      } catch(e) {
+      }
+    }
+  }
 }
