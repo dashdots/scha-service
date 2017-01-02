@@ -62,4 +62,33 @@ export default class LeecherCache {
       }
     }
   }
+
+  async loadPageIdsByRange(begin, end) {
+    return await Cache.dataDB.zRevRangeAsync(this.opts.dumpIndexKey, begin, end);
+    return [];
+  }
+
+  async saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
+    let allDumpData = [];
+    const {dumpKey} = this.opts;
+
+    if(!dataCmd) {
+      dataCmd = Cache.dataCmd;
+    }
+
+    leechResultArray = [leechResult];
+
+    leechResultArray.forEach(leechResult=>{
+      const keyName = `${leechResult.pageId}.${leechResult.sourceType}.${leechResult.lang}`;
+      if(leechResult.dump) {
+        allDumpData = allDumpData.concat([keyName, leechResult.dump]);
+      }
+    });
+
+    await Cache.runDataCmd(dataCmd, function(cmd) {
+      cmd.hmset(dumpKey, allDumpData)
+    });
+    //await this.saveResources({dataCmd, resourcesMapping: allResources});
+    await dataCmd.execAsync();
+  }
 }
