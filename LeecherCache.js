@@ -44,7 +44,12 @@ export default class LeecherCache {
 
 
   async loadListDump({page, lang}={}) { throw new Error();}
-  async loadPageDump({pageId, lang}={}) { throw new Error();}
+
+  async loadPageDump({pageId, lang}={}) {
+    const {dumpKey} = this.opts;
+    let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
+    return data;
+  }
 
   async getHashedIdsParsed(pageIds=[]) {
     const dataCmd = Cache.dataCmd;
@@ -70,19 +75,25 @@ export default class LeecherCache {
 
   async saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
     let allDumpData = [];
-    const {dumpKey} = this.opts;
+    let allPageId = [];
+    let allPageData = [];
+    const {dumpKey, leechStoreKey, dumpIndexKey} = this.opts;
 
     if(!dataCmd) {
       dataCmd = Cache.dataCmd;
     }
 
-    leechResultArray = [leechResult];
+    if(leechResult) {
+      leechResultArray = [leechResult];
+    }
 
     leechResultArray.forEach(leechResult=>{
       const keyName = `${leechResult.pageId}.${leechResult.sourceType}.${leechResult.lang}`;
       if(leechResult.dump) {
         allDumpData = allDumpData.concat([keyName, leechResult.dump]);
       }
+      allPageData = allPageData.concat([keyName, JSON.stringify(leechResult.toJSON())]);
+      allPageId = allPageId.concat([0, leechResult.pageId]);
     });
 
     await Cache.runDataCmd(dataCmd, function(cmd) {
