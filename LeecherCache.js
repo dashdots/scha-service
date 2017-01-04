@@ -48,7 +48,11 @@ export default class LeecherCache {
   async loadPageDump({pageId, lang}={}) {
     const {dumpKey} = this.opts;
     let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
-    return data;
+    if(data) {
+      try {
+        return zip.extract(data);
+      } catch(e) {}
+    }
   }
 
   async getHashedIdsParsed(pageIds=[]) {
@@ -74,6 +78,7 @@ export default class LeecherCache {
   }
 
   async saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
+    //const allResources = {};
     let allDumpData = [];
     let allPageId = [];
     let allPageData = [];
@@ -96,10 +101,16 @@ export default class LeecherCache {
       allPageId = allPageId.concat([0, leechResult.pageId]);
     });
 
-    await Cache.runDataCmd(dataCmd, function(cmd) {
-      cmd.hmset(dumpKey, allDumpData)
-    });
-    //await this.saveResources({dataCmd, resourcesMapping: allResources});
-    await dataCmd.execAsync();
+    if(allPageData.length) {
+      await Cache.runDataCmd(dataCmd, function(cmd) {
+        if(allDumpData.length) {
+          cmd.hmset(dumpKey, allDumpData)
+        }
+        cmd.zadd(dumpIndexKey, allPageId, 0);
+        cmd.hmset(leechStoreKey, allPageData);
+      });
+      //await this.saveResources({dataCmd, resourcesMapping: allResources});
+      await dataCmd.execAsync();
+    }
   }
 }
