@@ -73,7 +73,15 @@ export default class LeecherCache {
   }
 
   async loadPageIdsByRange(begin, end) {
-    return await Cache.dataDB.zRevRangeAsync(this.opts.dumpIndexKey, begin, end);
+    if(begin >= 0) {
+      if(end===undefined || end===false || end===null) {
+        end = await Cache.dataDB.zcardAsync(this.opts.dumpIndexKey)
+      }
+      if(end < begin) {
+        return [];
+      }
+      return await Cache.dataDB.zRevRangeAsync(this.opts.dumpIndexKey, begin, end);
+    }
     return [];
   }
 
