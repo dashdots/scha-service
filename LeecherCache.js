@@ -39,7 +39,13 @@ export default class LeecherCache {
     if(pageIds.length) {
       let data = await db.hmgetAsync(dumpKey, ...pageIds.map(pageId=>`${pageId}.${lang}.overview`));
       data = data.filter(x=>!!x);
-      return data;
+
+      if(data.length) {
+        if(listContentType === 'JSON') {
+          return `[${data.map(x=>zip.extract(x)).join(',')}]`;
+        }
+        return data;
+      }
     }
     return null;
   }
