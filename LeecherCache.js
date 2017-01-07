@@ -11,18 +11,6 @@ export default class LeecherCache {
   constructor({leechType, name, listContentType, listLinkCount}) {
     name = name.toUpperCase();
     leechType = leechType.toUpperCase();
-    /**
-     OPTS:
-
-     leechStoreKey
-     resourceKey
-     dumpIndexKey
-     parsedKey
-     dumpKey
-     name
-     listContentType
-     listLinkCount
-     */
     this.opts = {
       leechStoreKey: `${leechType}:${name}`,
       resourceKey: `RESOURCE:${name}`,
@@ -42,8 +30,19 @@ export default class LeecherCache {
     return Math.ceil(totalPageCount / listLinkCount);
   }
 
+  async loadListDump({page, lang}={}) {
+    const db = Cache.dumpDB;
+    const {dumpIndexKey, dumpKey, name, listContentType, listLinkCount} = this.opts;
 
-  async loadListDump({page, lang}={}) { throw new Error();}
+    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0,(page-1)*listLinkCount), Math.max(0, page*listLinkCount-1));
+
+    if(pageIds.length) {
+      let data = await db.hmgetAsync(dumpKey, ...pageIds.map(pageId=>`${pageId}.${lang}.overview`));
+      data = data.filter(x=>!!x);
+      return data;
+    }
+    return null;
+  }
 
   async loadPageDump({pageId, lang}={}) {
     const {dumpKey} = this.opts;
