@@ -1,3 +1,7 @@
+import Cache from './Cache';
+import JSON from 'scha.lib/lib/JSON';
+import zip from 'scha.lib/lib/zip';
+
 const BASE_TIME = new Date('2016/10/01').getTime();
 
 export default class LeecherCache {
