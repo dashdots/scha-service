@@ -5,7 +5,6 @@ import zip from 'scha.lib/lib/zip';
 const BASE_TIME = new Date('2016/10/01').getTime();
 
 export default class LeecherCache {
-  opts = {};
 
   static getScore(page, item) {
     const timeTag = 70000-Math.floor(((Date.now()-BASE_TIME)/1000) / (12*3600));
@@ -15,6 +14,7 @@ export default class LeecherCache {
   constructor({leechType, name, listContentType, listLinkCount}) {
     name = name.toUpperCase();
     leechType = leechType.toUpperCase();
+
     this.opts = {
       leechStoreKey: `${leechType}:${name}`,
       resourceKey: `RESOURCE:${name}`,
@@ -45,10 +45,17 @@ export default class LeecherCache {
       data = data.filter(x=>!!x);
 
       if(data.length) {
-        if(listContentType === 'JSON') {
-          return `[${data.map(x=>zip.extract(x)).join(',')}]`;
-        }
-        return data;
+        try {
+          switch(listContentType) {
+            case 'JSON':
+              return `[${data.map(x=>zip.extract(x)).join(',')}]`;
+            case 'HTML':
+            default:
+              return `<div class="__DUMP__">${data.map(x=>zip.extract(x)).join('')}</div>`;
+              break;
+          }
+
+        } catch(e){}
       }
     }
     return null;
@@ -60,7 +67,9 @@ export default class LeecherCache {
     if(data) {
       try {
         return zip.extract(data);
-      } catch(e) {}
+      } catch(e) {
+
+      }
     }
   }
 
@@ -69,29 +78,6 @@ export default class LeecherCache {
     pageIds.forEach(pageId=>dataCmd.sismember(this.opts.parsedKey, pageId));
     const rtn = await dataCmd.execAsync();
     return rtn.map(x=>!!x);
-  }
-
-  async loadLeechResult(pageId) {
-    const parsed = await Cache.dataDB.hgetAsync(this.opts.leechStoreKey, pageId);
-    if(parsed) {
-      try {
-        return JSON.parse(parsed);
-      } catch(e) {
-      }
-    }
-  }
-
-  async loadPageIdsByRange(begin, end) {
-    if(begin >= 0) {
-      if(end===undefined || end===false || end===null) {
-        end = await Cache.dataDB.zcardAsync(this.opts.dumpIndexKey)
-      }
-      if(end < begin) {
-        return [];
-      }
-      return await Cache.dataDB.zRevRangeAsync(this.opts.dumpIndexKey, begin, end);
-    }
-    return [];
   }
 
   async saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
@@ -130,4 +116,28 @@ export default class LeecherCache {
       await dataCmd.execAsync();
     }
   }
+
+  async loadLeechResult(pageId) {
+    const parsed = await Cache.dataDB.hgetAsync(this.opts.leechStoreKey, pageId);
+    if(parsed) {
+      try {
+        return JSON.parse(parsed);
+      } catch(e) {
+      }
+    }
+  }
+
+  async loadPageIdsByRange(begin, end) {
+    if(begin >= 0) {
+      if(end===undefined || end===false || end===null) {
+        end = await Cache.dataDB.zcardAsync(this.opts.dumpIndexKey)
+      }
+      if(end < begin) {
+        return [];
+      }
+      return await Cache.dataDB.zRevRangeAsync(this.opts.dumpIndexKey, begin, end);
+    }
+    return [];
+  }
+
 }
