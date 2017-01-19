@@ -4,13 +4,30 @@ import zip from 'scha.lib/lib/zip';
 
 const BASE_TIME = new Date('2016/10/01').getTime();
 
+/**
+ * Leecher cache for Scha service
+ */
 export default class LeecherCache {
 
+  /**
+   * Get score from page & item count
+   * @param {Number} page
+   * @param {Number} item
+   * @returns {number}
+   */
   static getScore(page, item) {
     const timeTag = 70000-Math.floor(((Date.now()-BASE_TIME)/1000) / (12*3600));
     return `${page-1}${(item)+1000}${timeTag+10000}`-100010000;
   }
 
+  /**
+   *
+   * Leecher cache for Scha service
+   * @param {String} leechType
+   * @param {String} name
+   * @param {String} listContentType
+   * @param {Number} listLinkCount
+   */
   constructor({leechType, name, listContentType, listLinkCount}) {
     name = name.toUpperCase();
     leechType = leechType.toUpperCase();
@@ -27,6 +44,10 @@ export default class LeecherCache {
     }
   }
 
+  /**
+   * Get list count
+   * @returns {Promise.<number>}
+   */
   async getListCount() {
     const {name, listLinkCount} = this.opts;
     const db = Cache.dumpDB;
@@ -34,6 +55,12 @@ export default class LeecherCache {
     return Math.ceil(totalPageCount / listLinkCount);
   }
 
+  /**
+   * Load list dump from db
+   * @param {String} page
+   * @param {String} lang
+   * @returns {Promise.<*>}
+   */
   async loadListDump({page, lang}={}) {
     const db = Cache.dumpDB;
     const {dumpIndexKey, dumpKey, name, listContentType, listLinkCount} = this.opts;
@@ -61,6 +88,12 @@ export default class LeecherCache {
     return null;
   }
 
+  /**
+   * Load page dump from db
+   * @param {String} pageId
+   * @param {String} lang
+   * @returns {Promise.<String>}
+   */
   async loadPageDump({pageId, lang}={}) {
     const {dumpKey} = this.opts;
     let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
@@ -73,6 +106,11 @@ export default class LeecherCache {
     }
   }
 
+  /**
+   * Get hashed ids from parsed pages
+   * @param {Number[]} pageIds
+   * @returns {Promise.<Array>}
+   */
   async getHashedIdsParsed(pageIds=[]) {
     const dataCmd = Cache.dataCmd;
     pageIds.forEach(pageId=>dataCmd.sismember(this.opts.parsedKey, pageId));
@@ -80,6 +118,13 @@ export default class LeecherCache {
     return rtn.map(x=>!!x);
   }
 
+  /**
+   * Save leech result to db
+   * @param {Cache} dataCmd
+   * @param leechResult
+   * @param leechResultArray
+   * @returns {Promise.<void>}
+   */
   async saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
     //const allResources = {};
     let allDumpData = [];
@@ -117,6 +162,11 @@ export default class LeecherCache {
     }
   }
 
+  /**
+   * Load leech result by page id
+   * @param {Number} pageId
+   * @returns {Promise.<?Object>}
+   */
   async loadLeechResult(pageId) {
     const parsed = await Cache.dataDB.hgetAsync(this.opts.leechStoreKey, pageId);
     if(parsed) {
@@ -127,6 +177,12 @@ export default class LeecherCache {
     }
   }
 
+  /**
+   * Load page id by range
+   * @param {Number} begin
+   * @param {Number} end
+   * @returns {Promise.<?Object>}
+   */
   async loadPageIdsByRange(begin, end) {
     if(begin >= 0) {
       if(end===undefined || end===false || end===null) {
