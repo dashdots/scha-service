@@ -19,4 +19,14 @@ executor.initialize({
   }
 }, async err=>{
 
+  await database.sync();
+  await searchEngine.sync();
+
+}).then(()=>{
+  log.on('log', (data)=>{ executor.emitSocket({event:'log', data}); });
+
+  log.notice('initialized');
+
+  executor.run();
+
 });
