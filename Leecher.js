@@ -59,6 +59,19 @@ export default class Leecher extends EventEmitter{
         LIST_ONLY,
         DOM_DECODE_ENTITIES=false,
         LANG,
+        bannedValidator,
+        listDomModifier,
+        listValidator,
+        listHeadersParser,
+        listResConverter,
+        getListUrl,
+        parseListItem,
+        pageDomModifier,
+        pageValidator,
+        pageHeadersParser,
+        pageResConverter,
+        getPageUrl,
+        parsePage,
 
     } = leecher;
 
@@ -74,6 +87,20 @@ export default class Leecher extends EventEmitter{
     this._leechType = LEECH_TYPE;
     this._listOnly = LIST_ONLY;
     this._domDecodeEntities = DOM_DECODE_ENTITIES;
+    if(!listValidator) {
+      listValidator = x=>x && x.length>1024*5;
+    }
+    listValidator = _wrapValidator(listValidator);
+
+    if(!pageValidator) {
+      pageValidator = x=>x && x.length>1024*5;
+    }
+    pageValidator = _wrapValidator(pageValidator);
+
+    if(!bannedValidator) {
+      bannedValidator = /your ip /i;
+    }
+    bannedValidator = _wrapValidator(bannedValidator);
   }
 
   async getListCount() {
@@ -82,4 +109,10 @@ export default class Leecher extends EventEmitter{
     const totalPageCount = await db.zcardAsync(this._dumpIndexKey);
     return Math.ceil(totalPageCount / this._listLinkCount);
   }
+
+  get listLinkCount() {return this._listLinkCount;}
+
+  getListUrl(page) { return this._getListUrl(page).replace(/^\/+/, this._homeUrl);}
+
+  getPageUrl(pageId) { return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);}
 }
