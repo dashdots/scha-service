@@ -100,7 +100,22 @@ export default class Leecher extends EventEmitter{
     if(!bannedValidator) {
       bannedValidator = /your ip /i;
     }
-    bannedValidator = _wrapValidator(bannedValidator);
+    this._pageDomModifier = pageDomModifier;
+    this._pageValidator = pageValidator;
+    this._pageResConverter = this._makeResConverter(pageResConverter, pageValidator);
+    this._listResConverter = this._makeResConverter(listResConverter, listValidator);
+    this._pageHeadersParser = this._makeHeadersParser(pageHeadersParser);
+    this._listHeadersParser = this._makeHeadersParser(listHeadersParser);
+    this._getPageUrl = getPageUrl;
+    this._parsePage = parsePage;
+
+    this._leechStoreKey = `${LEECH_TYPE}:${NAME}`;
+    this._dumpIndexKey = `DUMP_INDEX:${NAME}`;
+    this._dumpKey = `DUMP:${NAME}`;
+    this._listValidator = listValidator;
+    this._listDomModifier = listDomModifier;
+    this._getListUrl = getListUrl;
+    this._parseListItem = parseListItem;
   }
 
   async getListCount() {
@@ -108,6 +123,11 @@ export default class Leecher extends EventEmitter{
     //noinspection JSUnresolvedFunction
     const totalPageCount = await db.zcardAsync(this._dumpIndexKey);
     return Math.ceil(totalPageCount / this._listLinkCount);
+  }
+
+  _cleanHtml(content) {
+    return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig,'href="#"')
+                  .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ');
   }
 
   get listLinkCount() {return this._listLinkCount;}
