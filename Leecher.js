@@ -19,20 +19,6 @@ export const LeecherEvent = {
 
 export default class Leecher extends EventEmitter{
 
-
-  _proxy;
-  _leechType;
-  _siteName;
-  _listOnly;
-  _cookie;
-  _timeout;
-  _protocol;
-  _hostName;
-  _leechStoreKey;
-  _dumpIndexKey;
-  _dumpKey;
-
-
   get proxy() {return this._proxy;}
   get leechType() {return this._leechType;}
   get siteName() {return this._siteName;}
@@ -103,12 +89,12 @@ export default class Leecher extends EventEmitter{
     this._pageDomModifier = pageDomModifier;
     this._pageValidator = pageValidator;
     this._pageResConverter = this._makeResConverter(pageResConverter, pageValidator);
-    this._listResConverter = this._makeResConverter(listResConverter, listValidator);
     this._pageHeadersParser = this._makeHeadersParser(pageHeadersParser);
-    this._listHeadersParser = this._makeHeadersParser(listHeadersParser);
     this._getPageUrl = getPageUrl;
     this._parsePage = parsePage;
 
+    this._listResConverter = this._makeResConverter(listResConverter, listValidator);
+    this._listHeadersParser = this._makeHeadersParser(listHeadersParser);
     this._leechStoreKey = `${LEECH_TYPE}:${NAME}`;
     this._dumpIndexKey = `DUMP_INDEX:${NAME}`;
     this._dumpKey = `DUMP:${NAME}`;
@@ -116,6 +102,14 @@ export default class Leecher extends EventEmitter{
     this._listDomModifier = listDomModifier;
     this._getListUrl = getListUrl;
     this._parseListItem = parseListItem;
+  }
+
+  _makeHeadersParser(headersParser={}) {
+    return page => {
+      let headers = headersParser;
+      headers = headers(page);
+      return Object.assign({Cookie:this._cookie}, headers);
+    };
   }
 
   async getListCount() {
@@ -127,7 +121,9 @@ export default class Leecher extends EventEmitter{
 
   _cleanHtml(content) {
     return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig,'href="#"')
-                  .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ');
+                  .replace(/>\n?[\s\t]+\n?</g,'><')
+                  .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ')
+                  .replace(new RegExp(this._homeUrl.replace('.','\\.'),'ig'), '/');
   }
 
   get listLinkCount() {return this._listLinkCount;}
