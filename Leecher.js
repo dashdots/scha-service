@@ -1,4 +1,6 @@
 import {EventEmitter} from 'events';
+import ProxyDistributor, {BannedError, InvalidError, ProxyDistributorEvent} from 'scha.dump.proxy';
+
 
 function _wrapValidator(validator) {
   if(validator instanceof RegExp) {
@@ -46,12 +48,21 @@ export default class Leecher extends EventEmitter{
         DOM_DECODE_ENTITIES=false,
         LANG,
         bannedValidator,
+
+        LIST_LINK_COUNT,
+        LIST_CONTENT_TYPE='HTML',
+        LIST_DOM_SELECTOR,
+        LIST_DOM_REMOVAL_SELECTOR,
         listDomModifier,
         listValidator,
         listHeadersParser,
         listResConverter,
         getListUrl,
         parseListItem,
+
+        PAGE_CONTENT_TYPE='HTML',
+        PAGE_DOM_SELECTOR,
+        PAGE_DOM_REMOVAL_SELECTOR,
         pageDomModifier,
         pageValidator,
         pageHeadersParser,
@@ -63,6 +74,15 @@ export default class Leecher extends EventEmitter{
 
 
     const NAME = siteName;
+    LEECH_TYPE = LEECH_TYPE.toUpperCase();
+
+    if(Array.isArray(LIST_DOM_REMOVAL_SELECTOR)) {
+      LIST_DOM_REMOVAL_SELECTOR = LIST_DOM_REMOVAL_SELECTOR.join(',');
+    }
+    if(Array.isArray(PAGE_DOM_REMOVAL_SELECTOR)) {
+      PAGE_DOM_REMOVAL_SELECTOR = PAGE_DOM_REMOVAL_SELECTOR.join(',');
+    }
+
     this._siteName = NAME;
     this._lang = LANG;
     this._homeUrl = PROTOCOL+'://'+HOST_NAME.replace(/\/+$/,'')+'/';
@@ -102,6 +122,11 @@ export default class Leecher extends EventEmitter{
     this._listDomModifier = listDomModifier;
     this._getListUrl = getListUrl;
     this._parseListItem = parseListItem;
+
+    this._proxy = new ProxyDistributor(NAME);
+    this._proxy.on(ProxyDistributorEvent.notice, msg=>this.emit(ProxyDistributorEvent.notice, msg));
+    this._proxy.on(ProxyDistributorEvent.warning, msg=>this.emit(ProxyDistributorEvent.warning, msg));
+
   }
 
   _makeHeadersParser(headersParser={}) {
