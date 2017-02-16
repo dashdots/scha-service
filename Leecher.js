@@ -37,7 +37,6 @@ export default class Leecher extends EventEmitter{
   constructor(siteName) {
     super();
     const leecher = require(`scha.dump.sites/lib/${siteName}`);
-
     let {
         HOST_NAME,
         PROTOCOL,
@@ -72,6 +71,7 @@ export default class Leecher extends EventEmitter{
 
     } = leecher;
 
+    assert(LIST_CONTENT_TYPE !== 'JSON' || LIST_CONTENT_TYPE !== 'HTML', `unknown LIST_CONTENT_TYPE: ${LIST_CONTENT_TYPE}`);
 
     const NAME = siteName;
     LEECH_TYPE = LEECH_TYPE.toUpperCase();
@@ -82,6 +82,20 @@ export default class Leecher extends EventEmitter{
     if(Array.isArray(PAGE_DOM_REMOVAL_SELECTOR)) {
       PAGE_DOM_REMOVAL_SELECTOR = PAGE_DOM_REMOVAL_SELECTOR.join(',');
     }
+    if(!listValidator) {
+      listValidator = x=>x && x.length>1024*5;
+    }
+    listValidator = wrapValidator(listValidator);
+
+    if(!pageValidator) {
+      pageValidator = x=>x && x.length>1024*5;
+    }
+    pageValidator = wrapValidator(pageValidator);
+
+    if(!bannedValidator) {
+      bannedValidator = /your ip /i;
+    }
+    bannedValidator = wrapValidator(bannedValidator);
 
     this._siteName = NAME;
     this._lang = LANG;
@@ -93,19 +107,26 @@ export default class Leecher extends EventEmitter{
     this._leechType = LEECH_TYPE;
     this._listOnly = LIST_ONLY;
     this._domDecodeEntities = DOM_DECODE_ENTITIES;
-    if(!listValidator) {
-      listValidator = x=>x && x.length>1024*5;
-    }
-    listValidator = _wrapValidator(listValidator);
+    this._bannedValidator = bannedValidator;
+    this._proxy = new ProxyDistributor(NAME);
+    this._proxy.on(ProxyDistributorEvent.notice, msg=>this.emit(ProxyDistributorEvent.notice, msg));
+    this._proxy.on(ProxyDistributorEvent.warning, msg=>this.emit(ProxyDistributorEvent.warning, msg));
 
-    if(!pageValidator) {
-      pageValidator = x=>x && x.length>1024*5;
-    }
-    pageValidator = _wrapValidator(pageValidator);
+    this._listLinkCount = LIST_LINK_COUNT;
+    this._listContentType = LIST_CONTENT_TYPE;
+    this._listDomSelector = LIST_DOM_SELECTOR;
+    this._listDomRemovalSelector = LIST_DOM_REMOVAL_SELECTOR;
+    this._listOnly = LIST_ONLY;
+    this._listValidator = listValidator;
+    this._listDomModifier = listDomModifier;
+    this._listResConverter = this._makeResConverter(listResConverter, listValidator);
+    this._listHeadersParser = this._makeHeadersParser(listHeadersParser);
+    this._getListUrl = getListUrl;
+    this._parseListItem = parseListItem;
 
-    if(!bannedValidator) {
-      bannedValidator = /your ip /i;
-    }
+    this._pageContentType = PAGE_CONTENT_TYPE;
+    this._pageDomSelector = PAGE_DOM_SELECTOR;
+    this._pageDomRemovalSelector = PAGE_DOM_REMOVAL_SELECTOR;
     this._pageDomModifier = pageDomModifier;
     this._pageValidator = pageValidator;
     this._pageResConverter = this._makeResConverter(pageResConverter, pageValidator);
@@ -113,20 +134,28 @@ export default class Leecher extends EventEmitter{
     this._getPageUrl = getPageUrl;
     this._parsePage = parsePage;
 
-    this._listResConverter = this._makeResConverter(listResConverter, listValidator);
-    this._listHeadersParser = this._makeHeadersParser(listHeadersParser);
     this._leechStoreKey = `${LEECH_TYPE}:${NAME}`;
     this._dumpIndexKey = `DUMP_INDEX:${NAME}`;
     this._dumpKey = `DUMP:${NAME}`;
-    this._listValidator = listValidator;
-    this._listDomModifier = listDomModifier;
-    this._getListUrl = getListUrl;
-    this._parseListItem = parseListItem;
+  }
 
-    this._proxy = new ProxyDistributor(NAME);
-    this._proxy.on(ProxyDistributorEvent.notice, msg=>this.emit(ProxyDistributorEvent.notice, msg));
-    this._proxy.on(ProxyDistributorEvent.warning, msg=>this.emit(ProxyDistributorEvent.warning, msg));
+  _makeResConverter(resConverter, contentValidator) {
 
+    if(!resConverter) {
+      resConverter = x=>x.text();
+    }
+    let bannedValidator = this._bannedValidator;
+
+    return async function(res) {
+      const content = await resConverter(res);
+      if(!bannedValidator(content)) {
+        throw new BannedError();
+      }
+      if(!contentValidator(content)) {
+        throw new InvalidError();
+      }
+      return content;
+    };
   }
 
   _makeHeadersParser(headersParser={}) {
