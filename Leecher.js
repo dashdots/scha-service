@@ -140,11 +140,11 @@ export default class Leecher extends EventEmitter{
   }
 
   _makeResConverter(resConverter, contentValidator) {
-
     if(!resConverter) {
       resConverter = x=>x.text();
     }
-    let bannedValidator = this._bannedValidator;
+
+    const bannedValidator = this._bannedValidator;
 
     return async function(res) {
       const content = await resConverter(res);
