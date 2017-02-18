@@ -189,12 +189,14 @@ export default class Leecher extends EventEmitter{
   async _loadDumpFile({dumpFileDir, page, pageId}) {
     page = page || pageId;
     let content;
+    this.emit(LeecherEvent.message, `load dump file: ${page}`);
     content = await readFile(`${dumpFileDir}/${page}`);
     return content;
   }
 
   async _fetchRemoteFile({dumpFileDir, url, page, pageId, resConverter, headersParser}) {
     page = page || pageId;
+    this.emit(LeecherEvent.message, `fetch remote: ${page}`);
     let content = await this._proxy.fetch(url, {
       timeout: this._timeout,
       converter: resConverter,
@@ -202,6 +204,7 @@ export default class Leecher extends EventEmitter{
     }, {notFoundRetries:3});
 
     if(content) {
+      this.emit(LeecherEvent.message, `write dump file: ${page}`);
       await writeFile(`${dumpFileDir}/${page}`, content);
     }
     return content;
