@@ -185,4 +185,25 @@ export default class Leecher extends EventEmitter{
   getListUrl(page) { return this._getListUrl(page).replace(/^\/+/, this._homeUrl);}
 
   getPageUrl(pageId) { return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);}
+
+  async _loadDumpFile({dumpFileDir, page, pageId}) {
+    page = page || pageId;
+    let content;
+    content = await readFile(`${dumpFileDir}/${page}`);
+    return content;
+  }
+
+  async _fetchRemoteFile({dumpFileDir, url, page, pageId, resConverter, headersParser}) {
+    page = page || pageId;
+    let content = await this._proxy.fetch(url, {
+      timeout: this._timeout,
+      converter: resConverter,
+      headers: headersParser(page),
+    }, {notFoundRetries:3});
+
+    if(content) {
+      await writeFile(`${dumpFileDir}/${page}`, content);
+    }
+    return content;
+  }
 }
