@@ -19,20 +19,51 @@ export const LeecherEvent = {
   message: 'message',
 };
 
-export default class Leecher extends EventEmitter{
+export default class Leecher extends EventEmitter {
 
-  get proxy() {return this._proxy;}
-  get leechType() {return this._leechType;}
-  get siteName() {return this._siteName;}
-  get listOnly() {return this._listOnly;}
-  get cookie() {return this._cookie;}
-  get timeout() {return this._timeout;}
-  get protocol() {return this._protocol;}
-  get hostName() {return this._hostName;}
+  get proxy() {
+    return this._proxy;
+  }
 
-  get leechStoreKey() {return this._leechStoreKey; }
-  get dumpIndexKey(){ return this._dumpIndexKey; }
-  get dumpKey(){ return this._dumpKey; }
+  get leechType() {
+    return this._leechType;
+  }
+
+  get siteName() {
+    return this._siteName;
+  }
+
+  get listOnly() {
+    return this._listOnly;
+  }
+
+  get cookie() {
+    return this._cookie;
+  }
+
+  get timeout() {
+    return this._timeout;
+  }
+
+  get protocol() {
+    return this._protocol;
+  }
+
+  get hostName() {
+    return this._hostName;
+  }
+
+  get leechStoreKey() {
+    return this._leechStoreKey;
+  }
+
+  get dumpIndexKey() {
+    return this._dumpIndexKey;
+  }
+
+  get dumpKey() {
+    return this._dumpKey;
+  }
 
   constructor(siteName) {
     super();
@@ -44,12 +75,12 @@ export default class Leecher extends EventEmitter{
         COOKIE,
         LEECH_TYPE,
         LIST_ONLY,
-        DOM_DECODE_ENTITIES=false,
+        DOM_DECODE_ENTITIES = false,
         LANG,
         bannedValidator,
 
         LIST_LINK_COUNT,
-        LIST_CONTENT_TYPE='HTML',
+        LIST_CONTENT_TYPE = 'HTML',
         LIST_DOM_SELECTOR,
         LIST_DOM_REMOVAL_SELECTOR,
         listDomModifier,
@@ -59,7 +90,7 @@ export default class Leecher extends EventEmitter{
         getListUrl,
         parseListItem,
 
-        PAGE_CONTENT_TYPE='HTML',
+        PAGE_CONTENT_TYPE = 'HTML',
         PAGE_DOM_SELECTOR,
         PAGE_DOM_REMOVAL_SELECTOR,
         pageDomModifier,
@@ -83,12 +114,12 @@ export default class Leecher extends EventEmitter{
       PAGE_DOM_REMOVAL_SELECTOR = PAGE_DOM_REMOVAL_SELECTOR.join(',');
     }
     if(!listValidator) {
-      listValidator = x=>x && x.length>1024*5;
+      listValidator = x => x && x.length > 1024 * 5;
     }
     listValidator = wrapValidator(listValidator);
 
     if(!pageValidator) {
-      pageValidator = x=>x && x.length>1024*5;
+      pageValidator = x => x && x.length > 1024 * 5;
     }
     pageValidator = wrapValidator(pageValidator);
 
@@ -99,7 +130,7 @@ export default class Leecher extends EventEmitter{
 
     this._siteName = NAME;
     this._lang = LANG;
-    this._homeUrl = PROTOCOL+'://'+HOST_NAME.replace(/\/+$/,'')+'/';
+    this._homeUrl = PROTOCOL + '://' + HOST_NAME.replace(/\/+$/, '') + '/';
     this._hostName = HOST_NAME;
     this._protocol = PROTOCOL;
     this._timeout = TIMEOUT;
@@ -109,8 +140,8 @@ export default class Leecher extends EventEmitter{
     this._domDecodeEntities = DOM_DECODE_ENTITIES;
     this._bannedValidator = bannedValidator;
     this._proxy = new ProxyDistributor(NAME);
-    this._proxy.on(ProxyDistributorEvent.notice, msg=>this.emit(ProxyDistributorEvent.notice, msg));
-    this._proxy.on(ProxyDistributorEvent.warning, msg=>this.emit(ProxyDistributorEvent.warning, msg));
+    this._proxy.on(ProxyDistributorEvent.notice, msg => this.emit(ProxyDistributorEvent.notice, msg));
+    this._proxy.on(ProxyDistributorEvent.warning, msg => this.emit(ProxyDistributorEvent.warning, msg));
 
     this._listLinkCount = LIST_LINK_COUNT;
     this._listContentType = LIST_CONTENT_TYPE;
@@ -141,12 +172,12 @@ export default class Leecher extends EventEmitter{
 
   _makeResConverter(resConverter, contentValidator) {
     if(!resConverter) {
-      resConverter = x=>x.text();
+      resConverter = x => x.text();
     }
 
     const bannedValidator = this._bannedValidator;
 
-    return async function(res) {
+    return async function (res) {
       const content = await resConverter(res);
       if(!bannedValidator(content)) {
         throw new BannedError();
@@ -158,11 +189,11 @@ export default class Leecher extends EventEmitter{
     };
   }
 
-  _makeHeadersParser(headersParser={}) {
+  _makeHeadersParser(headersParser = {}) {
     return page => {
       let headers = headersParser;
       headers = headers(page);
-      return Object.assign({Cookie:this._cookie}, headers);
+      return Object.assign({Cookie: this._cookie}, headers);
     };
   }
 
@@ -174,17 +205,23 @@ export default class Leecher extends EventEmitter{
   }
 
   _cleanHtml(content) {
-    return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig,'href="#"')
-                  .replace(/>\n?[\s\t]+\n?</g,'><')
-                  .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ')
-                  .replace(new RegExp(this._homeUrl.replace('.','\\.'),'ig'), '/');
+    return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig, 'href="#"')
+                  .replace(/>\n?[\s\t]+\n?</g, '><')
+                  .replace(/&nbsp;/g, ' ').replace(/\r/g, '\n').replace(/\n+/g, '\n').replace(/ {3,}/g, ' ')
+                  .replace(new RegExp(this._homeUrl.replace('.', '\\.'), 'ig'), '/');
   }
 
-  get listLinkCount() {return this._listLinkCount;}
+  get listLinkCount() {
+    return this._listLinkCount;
+  }
 
-  getListUrl(page) { return this._getListUrl(page).replace(/^\/+/, this._homeUrl);}
+  getListUrl(page) {
+    return this._getListUrl(page).replace(/^\/+/, this._homeUrl);
+  }
 
-  getPageUrl(pageId) { return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);}
+  getPageUrl(pageId) {
+    return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);
+  }
 
   async _loadDumpFile({dumpFileDir, page, pageId}) {
     page = page || pageId;
@@ -194,6 +231,7 @@ export default class Leecher extends EventEmitter{
     return content;
   }
 
+
   async _fetchRemoteFile({dumpFileDir, url, page, pageId, resConverter, headersParser}) {
     page = page || pageId;
     this.emit(LeecherEvent.message, `fetch remote: ${page}`);
@@ -201,12 +239,37 @@ export default class Leecher extends EventEmitter{
       timeout: this._timeout,
       converter: resConverter,
       headers: headersParser(page),
-    }, {notFoundRetries:3});
+    }, {notFoundRetries: 3});
 
     if(content) {
-      this.emit(LeecherEvent.message, `write dump file: ${page}`);
-      await writeFile(`${dumpFileDir}/${page}`, content);
+      try {
+        if(!await exists(dumpFileDir)) {
+          await makeDirectory(dumpFileDir);
+        }
+        this.emit(LeecherEvent.message, `write dump file: ${page}`);
+        await writeFile(`${dumpFileDir}/${page}`, content);
+      }
+      catch (e) {
+      }
     }
     return content;
+  }
+
+
+  async _loadListDump({page}={}) {
+    const db = Cache.dumpDB;
+    const dumpIndexKey = this._dumpIndexKey;
+    const dumpKey = this._dumpKey;
+    const lang = this._lang;
+
+    const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page - 1) * 1000000000, page * 1000000000);
+
+    if(pageIds.length) {
+      let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId => `${pageId}.${lang}.overview`));
+      data = data.filter(x => !!x);
+
+      return data;
+    }
+    return null;
   }
 }
