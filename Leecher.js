@@ -197,6 +197,16 @@ export default class Leecher extends EventEmitter {
     };
   }
 
+  async loadPageIdsByRange(begin, end) {
+    if(end===undefined || end===false || end===null) {
+      end = await Cache.dataDB.zcardAsync(this._dumpIndexKey)
+    }
+    if(end < begin) {
+      return [];
+    }
+    return await Cache.dataDB.zrevrangeAsync(this._dumpIndexKey, begin, end);
+  }
+
   async getListCount() {
     const db = Cache.dumpDB;
     //noinspection JSUnresolvedFunction
@@ -256,20 +266,31 @@ export default class Leecher extends EventEmitter {
   }
 
 
+
   async _loadListDump({page}={}) {
     const db = Cache.dumpDB;
+    const listContentType = this._listContentType;
+    const listLinkCount = this._listLinkCount;
     const dumpIndexKey = this._dumpIndexKey;
     const dumpKey = this._dumpKey;
     const lang = this._lang;
 
-    const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page - 1) * 1000000000, page * 1000000000);
+    //const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page-1)*1000000000, page*1000000000);
+    //noinspection JSUnresolvedFunction
+    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0, (page - 1) * listLinkCount), Math.max(0, page * listLinkCount - 1));
 
     if(pageIds.length) {
+      //noinspection JSUnresolvedFunction
       let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId => `${pageId}.${lang}.overview`));
       data = data.filter(x => !!x);
-
       return data;
     }
     return null;
+  }
+
+  async _loadPageDump({pageId}={}) {
+    const dumpKey = this._dumpKey;
+    const lang = this._lang;
+    return await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
   }
 }
