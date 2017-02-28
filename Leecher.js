@@ -197,6 +197,27 @@ export default class Leecher extends EventEmitter {
     };
   }
 
+  async loadLeechResult({pageId}) {
+    const db = Cache.dataDB;
+    const lang = this._lang;
+    const results = await db.hmgetAsync(
+        this._leechStoreKey,
+        this._listOnly ? `${pageId}.list` : [
+              `${pageId}.list`,
+              `${pageId}.page`
+            ]
+    );
+
+    const merged = {lang, pageId, resources:{}, actors:[], genre:[], label:[]};
+    results.forEach((result)=>{
+      if(!result) {
+        throw new Error(`\`${pageId}\` leech result incomplete`);
+      }
+      result = JSON.parse(result);
+    });
+    return merged;
+  }
+
   async loadPageIdsByRange(begin, end) {
     if(end===undefined || end===false || end===null) {
       end = await Cache.dataDB.zcardAsync(this._dumpIndexKey)
