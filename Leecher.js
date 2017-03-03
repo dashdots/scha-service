@@ -200,6 +200,7 @@ export default class Leecher extends EventEmitter {
   async loadLeechResult({pageId}) {
     const db = Cache.dataDB;
     const lang = this._lang;
+    //noinspection JSUnresolvedFunction
     const results = await db.hmgetAsync(
         this._leechStoreKey,
         this._listOnly ? `${pageId}.list` : [
@@ -214,6 +215,20 @@ export default class Leecher extends EventEmitter {
         throw new Error(`\`${pageId}\` leech result incomplete`);
       }
       result = JSON.parse(result);
+
+      if(result.resources) {
+        Object.keys(result.resources).forEach(mediaType=>{
+          if(!merged.resources.hasOwnProperty(mediaType)) {
+            merged.resources[mediaType] = {};
+          }
+          Object.keys(result.resources[mediaType]).forEach(type=>{
+            if(!merged.resources[mediaType].hasOwnProperty(type)) {
+              merged.resources[mediaType][type] = [];
+            }
+            merged.resources[mediaType][type] = arrayUnique(merged.resources[mediaType][type].concat(result.resources[mediaType][type]||[]));
+          })
+        });
+      }
     });
     return merged;
   }
