@@ -229,17 +229,28 @@ export default class Leecher extends EventEmitter {
           })
         });
       }
+
+      if(result.title) {
+        merged.title = result.title;
+      }
+
+      if(result.intro) {
+        merged.intro = result.intro;
+      }
+
     });
     return merged;
   }
 
   async loadPageIdsByRange(begin, end) {
     if(end===undefined || end===false || end===null) {
+      //noinspection JSUnresolvedFunction
       end = await Cache.dataDB.zcardAsync(this._dumpIndexKey)
     }
     if(end < begin) {
       return [];
     }
+    //noinspection JSUnresolvedFunction
     return await Cache.dataDB.zrevrangeAsync(this._dumpIndexKey, begin, end);
   }
 
@@ -248,6 +259,31 @@ export default class Leecher extends EventEmitter {
     //noinspection JSUnresolvedFunction
     const totalPageCount = await db.zcardAsync(this._dumpIndexKey);
     return Math.ceil(totalPageCount / this._listLinkCount);
+  }
+
+  _getListItemsDOM(content) {
+    content = this._cleanHtml(content);
+
+    const $ = parseDOM(content,{decodeEntities: this._domDecodeEntities});
+
+    const main = $('.__DUMP__');
+    let items;
+    let newDump = !main.length;
+    if(newDump) {
+      items = $(this._listDomSelector);
+    } else {
+      items = main.find('>*');
+    }
+
+    if(newDump) {
+      if(this._listDomRemovalSelector) {
+        items.find(this._listDomRemovalSelector).remove();
+      }
+      main.addClass('__DUMP__');
+      main.cleanDOM();
+    }
+    items.isNewDump = newDump;
+    return items;
   }
 
   _cleanHtml(content) {
