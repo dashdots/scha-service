@@ -275,12 +275,24 @@ export default class Leecher extends EventEmitter {
       items = main.find('>*');
     }
 
+    if(!items.length) {
+      throw new Error('list item DOM not existed')
+    }
+
     if(newDump) {
+      if(this._listDomModifier) {
+        this._listDomModifier(items);
+      }
       if(this._listDomRemovalSelector) {
         items.find(this._listDomRemovalSelector).remove();
       }
+      //noinspection JSUnresolvedFunction
       main.addClass('__DUMP__');
       main.cleanDOM();
+    }
+
+    if(!items.length) {
+      throw new Error('list item DOM not existed')
     }
     items.isNewDump = newDump;
     return items;
