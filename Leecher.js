@@ -298,6 +298,32 @@ export default class Leecher extends EventEmitter {
     return items;
   }
 
+
+  _getPageDOM(content) {
+    content = this._cleanHtml(content);
+
+    const $ = parseDOM(content,{decodeEntities: this._domDecodeEntities});
+
+    let main = $('.__DUMP__');
+    let newDump = !main.length;
+
+    if(newDump) {
+      if(this._pageDomModifier) {
+        this._pageDomModifier(main);
+      }
+      if(this._pageDomRemovalSelector) {
+        main.find(this._pageDomRemovalSelector).remove();
+      }
+      main.addClass('__DUMP__');
+      main.cleanDOM();
+    }
+
+    if(!main.length) {
+      throw new Error('page dom not existed')
+    }
+    return main;
+  }
+
   _cleanHtml(content) {
     return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig, 'href="#"')
                   .replace(/>\n?[\s\t]+\n?</g, '><')
