@@ -298,7 +298,6 @@ export default class Leecher extends EventEmitter {
     return items;
   }
 
-
   _getPageDOM(content) {
     content = this._cleanHtml(content);
 
@@ -306,6 +305,12 @@ export default class Leecher extends EventEmitter {
 
     let main = $('.__DUMP__');
     let newDump = !main.length;
+    if(newDump) {
+      main = $(this._pageDomSelector);
+      if(!main.length) {
+        throw new Error('page dom not existed')
+      }
+    }
 
     if(newDump) {
       if(this._pageDomModifier) {
@@ -314,6 +319,7 @@ export default class Leecher extends EventEmitter {
       if(this._pageDomRemovalSelector) {
         main.find(this._pageDomRemovalSelector).remove();
       }
+      //noinspection JSUnresolvedFunction
       main.addClass('__DUMP__');
       main.cleanDOM();
     }
@@ -376,6 +382,44 @@ export default class Leecher extends EventEmitter {
   }
 
 
+  async fetchListResult({page, dumpPath, loadDumpFile, loadDumpCache}) {
+    let content;
+    let dumpFileDir = `${dumpPath}/${this._siteName}/list`;
+
+    // load dump file
+    if(!content && loadDumpFile) {
+      content = await this._loadDumpFile({dumpFileDir, page, validator: this._listValidator});
+    }
+
+    // fetch from remote
+    if(!content) {
+      const url = this.getListUrl(page);
+      content = await this._fetchRemoteFile({dumpFileDir, url, page, resConverter: this._listResConverter, headersParser: this._listHeadersParser});
+    }
+
+    let results = [];
+
+    if(this._listContentType === 'HTML') {
+      const items = this._getListItemsDOM(content);
+      const self = this;
+      items.travel(item=>{
+        const result = new LeechResult('list', this._homeUrl);
+
+        if(self._parseListItem(item, {result})!==false) {
+          if(result.pageId) {
+            result.dump = item.outerHtml();
+          }
+          results.push(result);
+        }
+      });
+    }
+
+    if(results.length > 0) {
+      await this._saveLeechResult({leechResultArray: results});
+    }
+
+    return results;
+  }
 
   async _loadListDump({page}={}) {
     const db = Cache.dumpDB;
