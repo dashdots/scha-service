@@ -1,6 +1,12 @@
 import {EventEmitter} from 'events';
 import ProxyDistributor, {BannedError, InvalidError, ProxyDistributorEvent} from 'scha.dump.proxy';
-
+import assert from 'assert';
+import {readFile, writeFile, makeDirectory, exists, removeFile} from 'scha.lib/lib/fs';
+import parseDOM from 'scha.lib/lib/DOM';
+import LeechResult, {LeechResultSourceType} from 'scha.dump.sites/lib/LeechResult';
+import Cache from './Cache';
+import arrayUnique from 'scha.lib/lib/array/arrayUnique';
+import JSON from 'scha.lib/lib/JSON';
 
 function _wrapValidator(validator) {
   if(validator instanceof RegExp) {
@@ -381,10 +387,18 @@ export default class Leecher extends EventEmitter {
     return content;
   }
 
-
   async fetchListResult({page, dumpPath, loadDumpFile, loadDumpCache}) {
     let content;
     let dumpFileDir = `${dumpPath}/${this._siteName}/list`;
+
+    // load dump cache
+    if(loadDumpCache) {
+      this.emit(LeecherEvent.message, `load dump cache: ${page}`);
+      content = await this._loadListDump({page});
+      if(!content) {
+        this.emit(LeecherEvent.message, `dump cache not found: ${page}`);
+      }
+    }
 
     // load dump file
     if(!content && loadDumpFile) {
@@ -397,21 +411,36 @@ export default class Leecher extends EventEmitter {
       content = await this._fetchRemoteFile({dumpFileDir, url, page, resConverter: this._listResConverter, headersParser: this._listHeadersParser});
     }
 
+    assert(!!content,'content not null');
+
     let results = [];
+
+    if(this._listContentType === 'JSON') {
+      results = this._parseListItem(JSON.parse(content), {});
+    }
 
     if(this._listContentType === 'HTML') {
       const items = this._getListItemsDOM(content);
       const self = this;
       items.travel(item=>{
         const result = new LeechResult('list', this._homeUrl);
+        result.on('warning', msg=>{
+          self.emit(LeecherEvent.leechLeak, msg);
+        });
 
         if(self._parseListItem(item, {result})!==false) {
           if(result.pageId) {
             result.dump = item.outerHtml();
+          } else {
+            self.emit(LeecherEvent.leechLeak, `page id not found`);
           }
           results.push(result);
         }
       });
+    }
+
+    if(results.length!== this._listLinkCount) {
+      this.emit(LeecherEvent.leechLeak, `list ${page} may miss pages (${results.length}/${this._listLinkCount})`)
     }
 
     if(results.length > 0) {
