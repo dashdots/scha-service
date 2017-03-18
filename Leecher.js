@@ -244,20 +244,35 @@ export default class Leecher extends EventEmitter {
         merged.intro = result.intro;
       }
 
+      if(result.studio) {
+        merged.studio = result.studio;
+      }
+
+      if(result.director) {
+        merged.director = result.director;
+      }
+
+      if(result.prefix) {
+        merged.prefix = result.prefix;
+      }
+
     });
     return merged;
   }
 
   async loadPageIdsByRange(begin, end) {
-    if(end===undefined || end===false || end===null) {
+    if(begin >= 0) {
+      if(end===undefined || end===false || end===null) {
+        //noinspection JSUnresolvedFunction
+        end = await Cache.dataDB.zcardAsync(this._dumpIndexKey)
+      }
+      if(end < begin) {
+        return [];
+      }
       //noinspection JSUnresolvedFunction
-      end = await Cache.dataDB.zcardAsync(this._dumpIndexKey)
+      return await Cache.dataDB.zrevrangeAsync(this._dumpIndexKey, begin, end);
     }
-    if(end < begin) {
-      return [];
-    }
-    //noinspection JSUnresolvedFunction
-    return await Cache.dataDB.zrevrangeAsync(this._dumpIndexKey, begin, end);
+    return [];
   }
 
   async getListCount() {
@@ -343,9 +358,7 @@ export default class Leecher extends EventEmitter {
                   .replace(new RegExp(this._homeUrl.replace('.', '\\.'), 'ig'), '/');
   }
 
-  get listLinkCount() {
-    return this._listLinkCount;
-  }
+  get listLinkCount() {return this._listLinkCount;}
 
   getListUrl(page) {
     return this._getListUrl(page).replace(/^\/+/, this._homeUrl);
@@ -471,10 +484,19 @@ export default class Leecher extends EventEmitter {
     return null;
   }
 
+
   async _loadPageDump({pageId}={}) {
     const dumpKey = this._dumpKey;
     const lang = this._lang;
-    return await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
+    //noinspection JSUnresolvedFunction
+    let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
+    if(data) {
+      try {
+        return zip.extract(data);
+      } catch(e) {
+
+      }
+    }
   }
 
 
@@ -506,6 +528,8 @@ export default class Leecher extends EventEmitter {
       const url = this.getPageUrl(pageId);
       content = await this._fetchRemoteFile({dumpFileDir, url, pageId, resConverter: this._pageResConverter, headersParser: this._pageHeadersParser});
     }
+
+    assert(!!content,'content not null');
 
     const dom = this._getPageDOM(content);
     const self = this;
