@@ -476,4 +476,39 @@ export default class Leecher extends EventEmitter {
     const lang = this._lang;
     return await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
   }
+
+
+  async fetchPageResult({pageId, dumpPath, loadDumpFile, loadDumpCache}) {
+    if(this._listOnly) {
+      this.emit(LeecherEvent.message, 'list only leecher');
+      return false;
+    }
+
+    let content;
+    const dumpFileDir = `${dumpPath}/${this._siteName}/page`;
+
+    // load dump file
+    if(!content && loadDumpFile) {
+      content = await this._loadDumpFile({dumpFileDir, pageId, validator: this._pageValidator});
+    }
+
+    // fetch from remote
+    if(!content) {
+      const url = this.getPageUrl(pageId);
+      content = await this._fetchRemoteFile({dumpFileDir, url, pageId, resConverter: this._pageResConverter, headersParser: this._pageHeadersParser});
+    }
+
+    const dom = this._getPageDOM(content);
+    const self = this;
+    const result = new LeechResult('page', this._homeUrl);
+    result.pageId = pageId;
+    result.dump = dom.html();
+
+    if(this._parsePage(dom, {pageId, result})===false) {
+      throw new Error('page parse failed');
+    }
+
+    await this._saveLeechResult({leechResult:result});
+    return result;
+  }
 }
