@@ -487,6 +487,15 @@ export default class Leecher extends EventEmitter {
     let content;
     const dumpFileDir = `${dumpPath}/${this._siteName}/page`;
 
+    // load dump cache
+    if(loadDumpCache) {
+      this.emit(LeecherEvent.message, `load dump cache: ${pageId}`);
+      content = await this._loadPageDump({pageId});
+      if(!content) {
+        this.emit(LeecherEvent.message, `dump cache not found: ${pageId}`);
+      }
+    }
+
     // load dump file
     if(!content && loadDumpFile) {
       content = await this._loadDumpFile({dumpFileDir, pageId, validator: this._pageValidator});
