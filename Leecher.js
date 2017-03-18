@@ -473,13 +473,26 @@ export default class Leecher extends EventEmitter {
 
     //const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page-1)*1000000000, page*1000000000);
     //noinspection JSUnresolvedFunction
-    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0, (page - 1) * listLinkCount), Math.max(0, page * listLinkCount - 1));
+    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0,(page-1)*listLinkCount), Math.max(0, page*listLinkCount-1));
 
     if(pageIds.length) {
       //noinspection JSUnresolvedFunction
-      let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId => `${pageId}.${lang}.overview`));
-      data = data.filter(x => !!x);
-      return data;
+      let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId=>`${pageId}.${lang}.overview`));
+      data = data.filter(x=>!!x);
+
+      if(data.length) {
+        try {
+          switch(listContentType) {
+            case 'JSON':
+              return `[${data.map(x=>zip.extract(x)).join(',')}]`;
+            case 'HTML':
+            default:
+              return `<div class="__DUMP__">${data.map(x=>zip.extract(x)).join('')}</div>`;
+              break;
+          }
+
+        } catch(e){ console.log(e)}
+      }
     }
     return null;
   }
