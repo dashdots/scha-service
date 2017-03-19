@@ -557,4 +557,35 @@ export default class Leecher extends EventEmitter {
     await this._saveLeechResult({leechResult:result});
     return result;
   }
+
+
+  async _saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
+    //const allResources = {};
+    let allDumpData = [];
+    let allPageId = [];
+    let allPageData = [];
+    const dumpIndexKey = this._dumpIndexKey;
+    const dumpKey = this._dumpKey;
+    const leechStoreKey = this._leechStoreKey;
+
+    leechResultArray.forEach(leechResult=>{
+      const keyName = `${leechResult.pageId}.${leechResult.sourceType}`;
+      if(leechResult.dump) {
+        allDumpData = allDumpData.concat([keyName, leechResult.dump]);
+      }
+      allPageData = allPageData.concat([keyName, JSON.stringify(leechResult.toJSON())]);
+      allPageId = allPageId.concat([0, leechResult.pageId]);
+    });
+
+    if(allPageData.length) {
+      await Cache.runDataCmd(dataCmd, function(cmd) {
+        if(allDumpData.length) {
+          cmd.hmset(dumpKey, allDumpData)
+        }
+        cmd.zadd(dumpIndexKey, allPageId, 0);
+        cmd.hmset(leechStoreKey, allPageData);
+      });
+      await dataCmd.execAsync();
+    }
+  }
 }
