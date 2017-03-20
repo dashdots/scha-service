@@ -368,11 +368,36 @@ export default class Leecher extends EventEmitter {
     return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);
   }
 
-  async _loadDumpFile({dumpFileDir, page, pageId}) {
+  async _loadDumpFile({dumpFileDir, page, pageId, validator}) {
     page = page || pageId;
     let content;
-    this.emit(LeecherEvent.message, `load dump file: ${page}`);
-    content = await readFile(`${dumpFileDir}/${page}`);
+    try {
+      this.emit(LeecherEvent.message, `load dump file: ${page}`);
+      content = await readFile(`${dumpFileDir}/${page}`);
+      let error = false;
+      if(!this._bannedValidator(content)) {
+        error = true;
+        this.emit(LeecherEvent.message, `banned dump file: ${page}`);
+      }
+      if(!validator(content)) {
+        error = true;
+        this.emit(LeecherEvent.message, `invalid dump file: ${page}`);
+      }
+      if(error) {
+        this.emit(LeecherEvent.message, `remove file: ${page}`);
+        await removeFile(`${dumpFileDir}/${page}`);
+        content = undefined;
+      } else {
+        this.emit(LeecherEvent.message, `dump file loaded: ${page}`);
+      }
+    } catch(e) {
+      content = undefined;
+      if(e.code === 'ENOENT') {
+        this.emit(LeecherEvent.message, `dump file not found: ${page}`);
+      } else {
+        throw e;
+      }
+    }
     return content;
   }
 
