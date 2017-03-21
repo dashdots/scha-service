@@ -16,6 +16,7 @@ function _wrapValidator(validator) {
   }
   return false;
 }
+
 /**
  *
  * @enum
@@ -25,51 +26,7 @@ export const LeecherEvent = {
   message: 'message',
 };
 
-export default class Leecher extends EventEmitter {
-
-  get proxy() {
-    return this._proxy;
-  }
-
-  get leechType() {
-    return this._leechType;
-  }
-
-  get siteName() {
-    return this._siteName;
-  }
-
-  get listOnly() {
-    return this._listOnly;
-  }
-
-  get cookie() {
-    return this._cookie;
-  }
-
-  get timeout() {
-    return this._timeout;
-  }
-
-  get protocol() {
-    return this._protocol;
-  }
-
-  get hostName() {
-    return this._hostName;
-  }
-
-  get leechStoreKey() {
-    return this._leechStoreKey;
-  }
-
-  get dumpIndexKey() {
-    return this._dumpIndexKey;
-  }
-
-  get dumpKey() {
-    return this._dumpKey;
-  }
+export default class Leecher extends EventEmitter{
 
   constructor(siteName) {
     super();
@@ -81,12 +38,12 @@ export default class Leecher extends EventEmitter {
         COOKIE,
         LEECH_TYPE,
         LIST_ONLY,
-        DOM_DECODE_ENTITIES = false,
+        DOM_DECODE_ENTITIES=false,
         LANG,
         bannedValidator,
 
         LIST_LINK_COUNT,
-        LIST_CONTENT_TYPE = 'HTML',
+        LIST_CONTENT_TYPE='HTML',
         LIST_DOM_SELECTOR,
         LIST_DOM_REMOVAL_SELECTOR,
         listDomModifier,
@@ -96,7 +53,7 @@ export default class Leecher extends EventEmitter {
         getListUrl,
         parseListItem,
 
-        PAGE_CONTENT_TYPE = 'HTML',
+        PAGE_CONTENT_TYPE='HTML',
         PAGE_DOM_SELECTOR,
         PAGE_DOM_REMOVAL_SELECTOR,
         pageDomModifier,
@@ -120,23 +77,23 @@ export default class Leecher extends EventEmitter {
       PAGE_DOM_REMOVAL_SELECTOR = PAGE_DOM_REMOVAL_SELECTOR.join(',');
     }
     if(!listValidator) {
-      listValidator = x => x && x.length > 1024 * 5;
+      listValidator = x=>x && x.length>1024*5;
     }
-    listValidator = wrapValidator(listValidator);
+    listValidator = _wrapValidator(listValidator);
 
     if(!pageValidator) {
-      pageValidator = x => x && x.length > 1024 * 5;
+      pageValidator = x=>x && x.length>1024*5;
     }
-    pageValidator = wrapValidator(pageValidator);
+    pageValidator = _wrapValidator(pageValidator);
 
     if(!bannedValidator) {
       bannedValidator = /your ip /i;
     }
-    bannedValidator = wrapValidator(bannedValidator);
+    bannedValidator = _wrapValidator(bannedValidator);
 
     this._siteName = NAME;
     this._lang = LANG;
-    this._homeUrl = PROTOCOL + '://' + HOST_NAME.replace(/\/+$/, '') + '/';
+    this._homeUrl = PROTOCOL+'://'+HOST_NAME.replace(/\/+$/,'')+'/';
     this._hostName = HOST_NAME;
     this._protocol = PROTOCOL;
     this._timeout = TIMEOUT;
@@ -146,8 +103,8 @@ export default class Leecher extends EventEmitter {
     this._domDecodeEntities = DOM_DECODE_ENTITIES;
     this._bannedValidator = bannedValidator;
     this._proxy = new ProxyDistributor(NAME);
-    this._proxy.on(ProxyDistributorEvent.notice, msg => this.emit(ProxyDistributorEvent.notice, msg));
-    this._proxy.on(ProxyDistributorEvent.warning, msg => this.emit(ProxyDistributorEvent.warning, msg));
+    this._proxy.on(ProxyDistributorEvent.notice, msg=>this.emit(ProxyDistributorEvent.notice, msg));
+    this._proxy.on(ProxyDistributorEvent.warning, msg=>this.emit(ProxyDistributorEvent.warning, msg));
 
     this._listLinkCount = LIST_LINK_COUNT;
     this._listContentType = LIST_CONTENT_TYPE;
@@ -176,14 +133,32 @@ export default class Leecher extends EventEmitter {
     this._dumpKey = `DUMP:${NAME}`;
   }
 
+  // region properties
+
+  get proxy() {return this._proxy;}
+  get leechType() {return this._leechType;}
+  get siteName() {return this._siteName;}
+  get listOnly() {return this._listOnly;}
+  get cookie() {return this._cookie;}
+  get timeout() {return this._timeout;}
+  get protocol() {return this._protocol;}
+  get hostName() {return this._hostName;}
+
+  get leechStoreKey() {return this._leechStoreKey; }
+  get dumpIndexKey(){ return this._dumpIndexKey; }
+  get dumpKey(){ return this._dumpKey; }
+
+  // endregion
+
+  // region common
   _makeResConverter(resConverter, contentValidator) {
+
     if(!resConverter) {
-      resConverter = x => x.text();
+      resConverter = x=>x.text();
     }
+    let bannedValidator = this._bannedValidator;
 
-    const bannedValidator = this._bannedValidator;
-
-    return async function (res) {
+    return async function(res) {
       const content = await resConverter(res);
       if(!bannedValidator(content)) {
         throw new BannedError();
@@ -195,12 +170,165 @@ export default class Leecher extends EventEmitter {
     };
   }
 
-  _makeHeadersParser(headersParser = {}) {
+  _makeHeadersParser(headersParser={}) {
     return page => {
       let headers = headersParser;
-      headers = headers(page);
-      return Object.assign({Cookie: this._cookie}, headers);
+      if(typeof(headers)==='function') {
+        headers = headers(page);
+      }
+      return Object.assign({Cookie:this._cookie}, headers);
     };
+  }
+
+  _cleanHtml(content) {
+    return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig,'href="#"')
+                  .replace(/>\n?[\s\t]+\n?</g,'><')
+                  .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ')
+                  .replace(new RegExp(this._homeUrl.replace('.','\\.'),'ig'), '/');
+  }
+
+  async _loadDumpFile({dumpFileDir, page, pageId, validator}) {
+    page = page || pageId;
+    let content;
+    try {
+      this.emit(LeecherEvent.message, `load dump file: ${page}`);
+      content = await readFile(`${dumpFileDir}/${page}`);
+      let error = false;
+      if(!this._bannedValidator(content)) {
+        error = true;
+        this.emit(LeecherEvent.message, `banned dump file: ${page}`);
+      }
+      if(!validator(content)) {
+        error = true;
+        this.emit(LeecherEvent.message, `invalid dump file: ${page}`);
+      }
+      if(error) {
+        this.emit(LeecherEvent.message, `remove file: ${page}`);
+        await removeFile(`${dumpFileDir}/${page}`);
+        content = undefined;
+      } else {
+        this.emit(LeecherEvent.message, `dump file loaded: ${page}`);
+      }
+    } catch(e) {
+      content = undefined;
+      if(e.code === 'ENOENT') {
+        this.emit(LeecherEvent.message, `dump file not found: ${page}`);
+      } else {
+        throw e;
+      }
+    }
+    return content;
+  }
+
+  async _fetchRemoteFile({dumpFileDir, url, page, pageId, resConverter, headersParser}) {
+    page = page || pageId;
+    this.emit(LeecherEvent.message, `fetch remote: ${page}`);
+    let content = await this._proxy.fetch(url, {
+      timeout: this._timeout,
+      converter: resConverter,
+      headers: headersParser(page),
+    }, {notFoundRetries:3});
+
+    if(content) {
+      try {
+        if(!await exists(dumpFileDir)) {
+          await makeDirectory(dumpFileDir);
+        }
+        this.emit(LeecherEvent.message, `write dump file: ${page}`);
+        await writeFile(`${dumpFileDir}/${page}`, content);
+      } catch(e) {}
+    }
+    return content;
+  }
+
+  async _saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
+    //const allResources = {};
+    let allDumpData = [];
+    let allPageId = [];
+    let allPageData = [];
+    const dumpIndexKey = this._dumpIndexKey;
+    const dumpKey = this._dumpKey;
+    const leechStoreKey = this._leechStoreKey;
+
+    if(!dataCmd) {
+      dataCmd = Cache.dataCmd;
+    }
+
+    if(leechResult) {
+      leechResultArray = [leechResult];
+    }
+
+    leechResultArray.forEach(leechResult=>{
+      const keyName = `${leechResult.pageId}.${leechResult.sourceType}`;
+      if(leechResult.dump) {
+        allDumpData = allDumpData.concat([keyName, leechResult.dump]);
+      }
+      allPageData = allPageData.concat([keyName, JSON.stringify(leechResult.toJSON())]);
+      allPageId = allPageId.concat([0, leechResult.pageId]);
+    });
+
+    if(allPageData.length) {
+      await Cache.runDataCmd(dataCmd, function(cmd) {
+        if(allDumpData.length) {
+          //noinspection JSUnresolvedFunction
+          cmd.hmset(dumpKey, allDumpData)
+        }
+        //noinspection JSUnresolvedFunction
+        cmd.zadd(dumpIndexKey, allPageId, 0);
+        //noinspection JSUnresolvedFunction
+        cmd.hmset(leechStoreKey, allPageData);
+      });
+      //await this.saveResources({dataCmd, resourcesMapping: allResources});
+      await dataCmd.execAsync();
+    }
+  }
+
+  async _loadListDump({page}={}) {
+    const db = Cache.dumpDB;
+    const listContentType = this._listContentType;
+    const listLinkCount = this._listLinkCount;
+    const dumpIndexKey = this._dumpIndexKey;
+    const dumpKey = this._dumpKey;
+    const lang = this._lang;
+
+    //const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page-1)*1000000000, page*1000000000);
+    //noinspection JSUnresolvedFunction
+    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0,(page-1)*listLinkCount), Math.max(0, page*listLinkCount-1));
+
+    if(pageIds.length) {
+      //noinspection JSUnresolvedFunction
+      let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId=>`${pageId}.${lang}.overview`));
+      data = data.filter(x=>!!x);
+
+      if(data.length) {
+        try {
+          switch(listContentType) {
+            case 'JSON':
+              return `[${data.map(x=>zip.extract(x)).join(',')}]`;
+            case 'HTML':
+            default:
+              return `<div class="__DUMP__">${data.map(x=>zip.extract(x)).join('')}</div>`;
+              break;
+          }
+
+        } catch(e){ console.log(e)}
+      }
+    }
+    return null;
+  }
+
+  async _loadPageDump({pageId}={}) {
+    const dumpKey = this._dumpKey;
+    const lang = this._lang;
+    //noinspection JSUnresolvedFunction
+    let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
+    if(data) {
+      try {
+        return zip.extract(data);
+      } catch(e) {
+
+      }
+    }
   }
 
   async loadLeechResult({pageId}) {
@@ -236,12 +364,24 @@ export default class Leecher extends EventEmitter {
         });
       }
 
-      if(result.title) {
-        merged.title = result.title;
+      if(result.actors && result.actors.length) {
+        merged.actors = result.actors;
+      }
+
+      if(result.genre && result.genre.length) {
+        merged.genre = result.genre;
+      }
+
+      if(result.label && result.label.length) {
+        merged.label = result.label;
       }
 
       if(result.intro) {
         merged.intro = result.intro;
+      }
+
+      if(result.title) {
+        merged.title = result.title;
       }
 
       if(result.studio) {
@@ -255,7 +395,18 @@ export default class Leecher extends EventEmitter {
       if(result.prefix) {
         merged.prefix = result.prefix;
       }
-
+      if(result.serialNumber) {
+        merged.serialNumber = result.serialNumber;
+      }
+      if(result.category) {
+        merged.category = result.category;
+      }
+      if(result.releaseDate) {
+        merged.releaseDate = result.releaseDate;
+      }
+      if(result.duration) {
+        merged.duration = result.duration;
+      }
     });
     return merged;
   }
@@ -281,6 +432,10 @@ export default class Leecher extends EventEmitter {
     const totalPageCount = await db.zcardAsync(this._dumpIndexKey);
     return Math.ceil(totalPageCount / this._listLinkCount);
   }
+  // endregion
+
+  // region list
+  get listLinkCount() {return this._listLinkCount;}
 
   _getListItemsDOM(content) {
     content = this._cleanHtml(content);
@@ -319,111 +474,7 @@ export default class Leecher extends EventEmitter {
     return items;
   }
 
-  _getPageDOM(content) {
-    content = this._cleanHtml(content);
-
-    const $ = parseDOM(content,{decodeEntities: this._domDecodeEntities});
-
-    let main = $('.__DUMP__');
-    let newDump = !main.length;
-    if(newDump) {
-      main = $(this._pageDomSelector);
-      if(!main.length) {
-        throw new Error('page dom not existed')
-      }
-    }
-
-    if(newDump) {
-      if(this._pageDomModifier) {
-        this._pageDomModifier(main);
-      }
-      if(this._pageDomRemovalSelector) {
-        main.find(this._pageDomRemovalSelector).remove();
-      }
-      //noinspection JSUnresolvedFunction
-      main.addClass('__DUMP__');
-      main.cleanDOM();
-    }
-
-    if(!main.length) {
-      throw new Error('page dom not existed')
-    }
-    return main;
-  }
-
-  _cleanHtml(content) {
-    return content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig, 'href="#"')
-                  .replace(/>\n?[\s\t]+\n?</g, '><')
-                  .replace(/&nbsp;/g, ' ').replace(/\r/g, '\n').replace(/\n+/g, '\n').replace(/ {3,}/g, ' ')
-                  .replace(new RegExp(this._homeUrl.replace('.', '\\.'), 'ig'), '/');
-  }
-
-  get listLinkCount() {return this._listLinkCount;}
-
-  getListUrl(page) {
-    return this._getListUrl(page).replace(/^\/+/, this._homeUrl);
-  }
-
-  getPageUrl(pageId) {
-    return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);
-  }
-
-  async _loadDumpFile({dumpFileDir, page, pageId, validator}) {
-    page = page || pageId;
-    let content;
-    try {
-      this.emit(LeecherEvent.message, `load dump file: ${page}`);
-      content = await readFile(`${dumpFileDir}/${page}`);
-      let error = false;
-      if(!this._bannedValidator(content)) {
-        error = true;
-        this.emit(LeecherEvent.message, `banned dump file: ${page}`);
-      }
-      if(!validator(content)) {
-        error = true;
-        this.emit(LeecherEvent.message, `invalid dump file: ${page}`);
-      }
-      if(error) {
-        this.emit(LeecherEvent.message, `remove file: ${page}`);
-        await removeFile(`${dumpFileDir}/${page}`);
-        content = undefined;
-      } else {
-        this.emit(LeecherEvent.message, `dump file loaded: ${page}`);
-      }
-    } catch(e) {
-      content = undefined;
-      if(e.code === 'ENOENT') {
-        this.emit(LeecherEvent.message, `dump file not found: ${page}`);
-      } else {
-        throw e;
-      }
-    }
-    return content;
-  }
-
-
-  async _fetchRemoteFile({dumpFileDir, url, page, pageId, resConverter, headersParser}) {
-    page = page || pageId;
-    this.emit(LeecherEvent.message, `fetch remote: ${page}`);
-    let content = await this._proxy.fetch(url, {
-      timeout: this._timeout,
-      converter: resConverter,
-      headers: headersParser(page),
-    }, {notFoundRetries: 3});
-
-    if(content) {
-      try {
-        if(!await exists(dumpFileDir)) {
-          await makeDirectory(dumpFileDir);
-        }
-        this.emit(LeecherEvent.message, `write dump file: ${page}`);
-        await writeFile(`${dumpFileDir}/${page}`, content);
-      }
-      catch (e) {
-      }
-    }
-    return content;
-  }
+  getListUrl(page) { return this._getListUrl(page).replace(/^\/+/, this._homeUrl);}
 
   async fetchListResult({page, dumpPath, loadDumpFile, loadDumpCache}) {
     let content;
@@ -487,56 +538,43 @@ export default class Leecher extends EventEmitter {
 
     return results;
   }
+  // endregion
 
-  async _loadListDump({page}={}) {
-    const db = Cache.dumpDB;
-    const listContentType = this._listContentType;
-    const listLinkCount = this._listLinkCount;
-    const dumpIndexKey = this._dumpIndexKey;
-    const dumpKey = this._dumpKey;
-    const lang = this._lang;
+  // region page
 
-    //const pageIds = await db.zRangeByScoreAsync(dumpIndexKey, (page-1)*1000000000, page*1000000000);
-    //noinspection JSUnresolvedFunction
-    const pageIds = await db.zrangeAsync(dumpIndexKey, Math.max(0,(page-1)*listLinkCount), Math.max(0, page*listLinkCount-1));
+  _getPageDOM(content) {
+    content = this._cleanHtml(content);
 
-    if(pageIds.length) {
+    const $ = parseDOM(content,{decodeEntities: this._domDecodeEntities});
+
+    let main = $('.__DUMP__');
+    let newDump = !main.length;
+    if(newDump) {
+      main = $(this._pageDomSelector);
+      if(!main.length) {
+        throw new Error('page dom not existed')
+      }
+    }
+
+    if(newDump) {
+      if(this._pageDomModifier) {
+        this._pageDomModifier(main);
+      }
+      if(this._pageDomRemovalSelector) {
+        main.find(this._pageDomRemovalSelector).remove();
+      }
       //noinspection JSUnresolvedFunction
-      let data = await db.hmgetAsync(dumpKey, pageIds.map(pageId=>`${pageId}.${lang}.overview`));
-      data = data.filter(x=>!!x);
-
-      if(data.length) {
-        try {
-          switch(listContentType) {
-            case 'JSON':
-              return `[${data.map(x=>zip.extract(x)).join(',')}]`;
-            case 'HTML':
-            default:
-              return `<div class="__DUMP__">${data.map(x=>zip.extract(x)).join('')}</div>`;
-              break;
-          }
-
-        } catch(e){ console.log(e)}
-      }
+      main.addClass('__DUMP__');
+      main.cleanDOM();
     }
-    return null;
+
+    if(!main.length) {
+      throw new Error('page dom not existed')
+    }
+    return main;
   }
 
-
-  async _loadPageDump({pageId}={}) {
-    const dumpKey = this._dumpKey;
-    const lang = this._lang;
-    //noinspection JSUnresolvedFunction
-    let data = await Cache.dumpDB.hgetAsync(dumpKey, `${pageId}.${lang}.detail`);
-    if(data) {
-      try {
-        return zip.extract(data);
-      } catch(e) {
-
-      }
-    }
-  }
-
+  getPageUrl(pageId) { return this._getPageUrl(pageId).replace(/^\/+/, this._homeUrl);}
 
   async fetchPageResult({pageId, dumpPath, loadDumpFile, loadDumpCache}) {
     if(this._listOnly) {
@@ -572,6 +610,9 @@ export default class Leecher extends EventEmitter {
     const dom = this._getPageDOM(content);
     const self = this;
     const result = new LeechResult('page', this._homeUrl);
+    result.on('warning', msg=>{
+      self.emit(LeecherEvent.leechLeak, msg);
+    });
     result.pageId = pageId;
     result.dump = dom.html();
 
@@ -582,46 +623,6 @@ export default class Leecher extends EventEmitter {
     await this._saveLeechResult({leechResult:result});
     return result;
   }
+  // endregion
 
-  async _saveLeechResult({dataCmd, leechResult, leechResultArray=[]}={}) {
-    //const allResources = {};
-    let allDumpData = [];
-    let allPageId = [];
-    let allPageData = [];
-    const dumpIndexKey = this._dumpIndexKey;
-    const dumpKey = this._dumpKey;
-    const leechStoreKey = this._leechStoreKey;
-
-    if(!dataCmd) {
-      dataCmd = Cache.dataCmd;
-    }
-
-    if(leechResult) {
-      leechResultArray = [leechResult];
-    }
-
-    leechResultArray.forEach(leechResult=>{
-      const keyName = `${leechResult.pageId}.${leechResult.sourceType}`;
-      if(leechResult.dump) {
-        allDumpData = allDumpData.concat([keyName, leechResult.dump]);
-      }
-      allPageData = allPageData.concat([keyName, JSON.stringify(leechResult.toJSON())]);
-      allPageId = allPageId.concat([0, leechResult.pageId]);
-    });
-
-    if(allPageData.length) {
-      await Cache.runDataCmd(dataCmd, function(cmd) {
-        if(allDumpData.length) {
-          //noinspection JSUnresolvedFunction
-          cmd.hmset(dumpKey, allDumpData)
-        }
-        //noinspection JSUnresolvedFunction
-        cmd.zadd(dumpIndexKey, allPageId, 0);
-        //noinspection JSUnresolvedFunction
-        cmd.hmset(leechStoreKey, allPageData);
-      });
-      //await this.saveResources({dataCmd, resourcesMapping: allResources});
-      await dataCmd.execAsync();
-    }
-  }
 }
