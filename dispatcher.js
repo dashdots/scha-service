@@ -19,6 +19,16 @@ executor.initialize({
   }
 }, async err=>{
 
+  function onPeerMessage(sender, {event, data}) {}
+
+  executor.on(ExecutorEvent.dispose, (sender, resolve)=>{log.notice('dispose'); resolve();});
+  executor.on(ExecutorEvent.running,()=>{log.notice('running')});
+  executor.on(ExecutorEvent.exit,()=>{log.danger('exit')});
+  executor.on(ExecutorEvent.exiting,()=>{log.attention('try exit, wait for dispose')});
+  executor.on(ExecutorEvent.idle,()=>{log.notice('idle')});
+  executor.on(ExecutorEvent.error,(sender, error)=>{log.error(error)});
+  executor.on(ExecutorEvent.peer, onPeerMessage);
+
   await database.sync();
   await searchEngine.sync();
 
