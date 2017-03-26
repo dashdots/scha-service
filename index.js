@@ -26,6 +26,28 @@ function onPeerMessage(sender, {event, data}) {
   log.debug({event, data}, 'peer message:');
 }
 
+async function buildListTasks({name, begin=1, end, tasks, ...params}) {
+  name = name.toUpperCase();
+  if(!begin) {
+    begin = 1;
+  }
+
+  if(!tasks || tasks.length===0) {
+    tasks = [];
+    if(!end) {
+      end = await (new Leecher(name)).getListCount();
+    }
+
+    if(!begin || !end) {
+      return false;
+    }
+
+    for(let i=begin; i<=end; i++) {
+      tasks.push(i);
+    }
+  }
+  return tasks.map(page=>Object.assign({}, params, {name, page}));
+}
 
 async function buildPageTasks({name, begin=0, end, tasks, ...params}) {
   name = name.toUpperCase();
