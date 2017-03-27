@@ -76,6 +76,14 @@ async function publishTasks({type, task}) {
   let executorTasks;
 
   if(type === TaskType.Remote) {
+    if(!isObject(task)) {
+      log.error({body:task}, `invalid remote task data body:`);
+      return false;
+    }
+    if(!task.name) {
+      log.error(`invalid leecher task name: \`${task.name}\``);
+      return false;
+    }
 
     switch (task.type) {
       case LeechTaskType.ListTask:
@@ -94,8 +102,10 @@ async function publishTasks({type, task}) {
   }
 
   if(!executorTasks || !Array.isArray(executorTasks) || executorTasks.length===0) {
+    log.attention(`task ignored, because no remote executor tasks`);
     return false;
   }
 
+  log.notice(`${executorTasks.length} task found`);
   executor.dispatchTasks(type, executorTasks);
 }
