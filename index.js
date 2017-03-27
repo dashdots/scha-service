@@ -64,3 +64,38 @@ async function buildSyncholizeTasks({name, begin = 0, end, tasks, ...params}) {
   }
   return tasks.map(pageId=>Object.assign({}, params, {name, pageId}));
 }
+
+
+async function publishTasks({type, task}) {
+
+  if(!TaskType.hasOwnProperty(type)) {
+    log.error(`invalid executor task type: \`${type}\``);
+    return false;
+  }
+
+  let executorTasks;
+
+  if(type === TaskType.Remote) {
+
+    switch (task.type) {
+      case LeechTaskType.ListTask:
+        executorTasks = await buildListTasks(task);
+        break;
+      case LeechTaskType.PageTask:
+        executorTasks = await buildPageTasks(task);
+        break;
+      case LeechTaskType.SyncholizeTask:
+        executorTasks = await buildSyncholizeTasks(task);
+        break;
+      default:
+        log.error(`invalid leecher task type: \`${task.type}\``);
+        return false;
+    }
+  }
+
+  if(!executorTasks || !Array.isArray(executorTasks) || executorTasks.length===0) {
+    return false;
+  }
+
+  executor.dispatchTasks(type, executorTasks);
+}
