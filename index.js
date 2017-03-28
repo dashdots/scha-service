@@ -13,7 +13,6 @@ class NopTask extends Task {
   }
 }
 
-
 class NopTaskFactory extends TaskFactory {
   create(task) {
     return new NopTask();
@@ -24,6 +23,15 @@ const taskFactory = new NopTaskFactory();
 
 function onPeerMessage(sender, {event, data}) {
   log.debug({event, data}, 'peer message:');
+  switch(event) {
+    case 'tasks':
+      if(isObject(data)) {
+        publishTasks(data).catch(e=>{log.error(e)});
+      } else {
+        log.error('task not valid')
+      }
+      break;
+  }
 }
 
 async function buildListTasks({name, begin=1, end, tasks, ...params}) {
@@ -64,7 +72,6 @@ async function buildSyncholizeTasks({name, begin = 0, end, tasks, ...params}) {
   }
   return tasks.map(pageId=>Object.assign({}, params, {name, pageId}));
 }
-
 
 async function publishTasks({type, task}) {
 
@@ -109,3 +116,36 @@ async function publishTasks({type, task}) {
   log.notice(`${executorTasks.length} task found`);
   executor.dispatchTasks(type, executorTasks);
 }
+
+
+
+executor.initialize({
+  identifier:'Leecher',
+  task:{
+    invokerLimit:1,
+    factory:taskFactory
+  },
+  child:{
+    limit:20,
+    params:[],
+    modulePath:path.resolve(__dirname, './dispatcher.js')
+  }
+},
+err=>{
+  executor.on(ExecutorEvent.dispose, (sender, resolve)=>{log.notice('dispose'); resolve();});
+  executor.on(ExecutorEvent.running,()=>{log.notice('running')});
+  executor.on(ExecutorEvent.exit,()=>{log.danger('exit')});
+  executor.on(ExecutorEvent.exiting,()=>{log.attention('try exit, wait for dispose')});
+  executor.on(ExecutorEvent.idle,()=>{log.notice('idle')});
+  executor.on(ExecutorEvent.error,(sender, error)=>{log.error(error)});
+  executor.on(ExecutorEvent.peer, onPeerMessage)
+
+})
+.then(()=>{
+  log.on('log', (data)=>{ executor.emitSocket({event:'log', data}); });
+
+  log.notice('initialized');
+
+  executor.run();
+
+});
