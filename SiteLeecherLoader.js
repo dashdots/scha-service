@@ -99,3 +99,107 @@ export function listLeecherLoader(siteName) {
     _hashKey:x=>_hashKey(NAME,x),
   }
 }
+
+export function pageLeecherLoader(siteName) {
+  const leecher = _loadLeecher(siteName);
+
+  let {
+      HOST_NAME, PROTOCOL, TIMEOUT, COOKIE, LEECH_TYPE, PAGE_LANG=['en'], PAGE_CONTENT_TYPE='HTML',
+      PAGE_DOM_SELECTOR: DOM_SELECTOR,
+      PAGE_DOM_REMOVAL_SELECTOR: DOM_REMOVAL_SELECTOR,
+      LIST_ONLY=false,
+      DOM_DECODE_ENTITIES=false,
+
+      pageDomModifier: domModifier,
+      bannedValidator,
+      pageValidator,
+      pageHeadersParser,
+      pageResConverter,
+      getPageUrl,
+      parsePage: parse,
+  } = leecher;
+
+  LEECH_TYPE = LEECH_TYPE.toUpperCase();
+  const NAME = siteName.toUpperCase();
+
+  const HOME_URL = PROTOCOL+'://'+HOST_NAME.replace(/\/+$/,'')+'/';
+  const resConverter = _makeResConverter(pageResConverter, bannedValidator, pageValidator);
+  const headersParser = _makeHeadersParser(pageHeadersParser, COOKIE);
+  const getUrl = (page, lang) => getPageUrl(page, lang).replace(/^\/+/,HOME_URL);
+  const getSign = page => `${LEECH_TYPE}:${siteName}:${page}`;
+  const cache = new LeecherCache(LEECH_TYPE, NAME);
+
+  if(Array.isArray(DOM_REMOVAL_SELECTOR)) {
+    DOM_REMOVAL_SELECTOR = DOM_REMOVAL_SELECTOR.join(',');
+  }
+
+  const getDOM = content => {
+    content = content.replace(/href\s*=\s*"javascript:void\(0?\);?"/ig,'href="#"')
+                     .replace(/&nbsp;/g,' ').replace(/\r/g,'\n').replace(/\n+/g,'\n').replace(/ {3,}/g,' ')
+                     .replace(new RegExp(HOME_URL.replace('.','\\.'),'ig'), '/');
+
+    const $ = parseDOM(content,{decodeEntities: DOM_DECODE_ENTITIES});
+
+    let main = $('.__DUMP__');
+    let newDump = !main.length;
+    if(newDump) {
+      main = $(DOM_SELECTOR);
+      if(!main.length) {
+        throw new Error('main not existed')
+      }
+    }
+
+    if(newDump) {
+      if(domModifier) {
+        domModifier(main);
+      }
+      if(DOM_REMOVAL_SELECTOR) {
+        main.find(DOM_REMOVAL_SELECTOR).remove();
+      }
+      main.addClass('__DUMP__');
+      main.cleanDOM();
+    }
+
+    if(!main.length) {
+      throw new Error('main not existed')
+    }
+    return main;
+  };
+
+  const getLeechResult = (content, lang, pageId, existedData)=>{
+    const leechResult = new LeechResult(lang, HOME_URL);
+    leechResult.pageId = pageId;
+    const main = getDOM(content);
+    if(parse(main, {lang, pageId, existedData, result:leechResult})===false) {
+      throw new Error('page parse error');
+    }
+    return leechResult;
+  };
+
+  const leechResult = leecher.getLeechResult(lang, pageId);
+  leechResult.on('warning', msg=>log.warn(`${pageId}.${lang} leechResult: ${msg}`));
+
+  if(leecher.parse(main, {lang, pageId, existedData: mergedData, result:leechResult})===false) {
+    throw new Error('page parse error');
+  }
+
+  return {
+    HOST_NAME, PROTOCOL, TIMEOUT, COOKIE, LEECH_TYPE, LANG:PAGE_LANG, HOME_URL, NAME, CONTENT_TYPE: PAGE_CONTENT_TYPE,
+    DOM_SELECTOR,
+    DOM_REMOVAL_SELECTOR,
+    LIST_ONLY,
+    DOM_DECODE_ENTITIES,
+
+    domModifier,
+    resConverter,
+    headersParser,
+    getUrl,
+    getSign,
+    getDOM,
+    getLeechResult,
+    parse,
+    _hashResource:x=>_hashResource(NAME,x),
+    _hashKey:x=>_hashKey(NAME,x),
+    cache,
+  }
+}
