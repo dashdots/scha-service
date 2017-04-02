@@ -1,32 +1,29 @@
+/**
+ * Scha service, Only execute by Scha portable (need environment injection).
+ */
+
 import 'source-map-support/register';
 import 'babel-polyfill';
 import Log from 'scha.lib/lib/Log';
 import executor, {ExecutorEvent, Task, TaskFactory, TaskType} from './Executor';
 import Leecher from './Leecher';
 import LeechTaskType from './LeecherTaskType';
+import isObject from 'scha.lib/lib/object/isObject';
 
 const log = new Log({name:'Leecher', logName:false, showPid:true});
 
-class NopTask extends Task {
-  run() {
-    this.success();
-  }
-}
-
-class NopTaskFactory extends TaskFactory {
-  create(task) {
-    return new NopTask();
-  }
-}
-
-const taskFactory = new NopTaskFactory();
-
-function onPeerMessage(sender, {event, data}) {
+/**
+ * Handler for peer message event
+ * @param {ExecutorBase} sender
+ * @param {String} event
+ * @param {Object} data
+ */
+function _onPeerMessage(sender, {event, data}) {
   log.debug({event, data}, 'peer message:');
   switch(event) {
     case 'tasks':
       if(isObject(data)) {
-        publishTasks(data).catch(e=>{log.error(e)});
+        _publishTasks(data).catch(e=>{log.error(e)});
       } else {
         log.error('task not valid')
       }
@@ -34,7 +31,16 @@ function onPeerMessage(sender, {event, data}) {
   }
 }
 
-async function buildListTasks({name, begin=1, end, tasks, ...params}) {
+/**
+ * Build list tasks
+ * @param {String} name - Leecher name
+ * @param {Number} begin - Begin index
+ * @param {Number} end - End index
+ * @param {Task[]} tasks - Syncholize tasks
+ * @param {Object[]} params - Params for each task
+ * @returns {Promise.<*>}
+ */
+async function _buildListTasks({name, begin=1, end, tasks, ...params}) {
   name = name.toUpperCase();
   if(!begin) {
     begin = 1;
@@ -57,7 +63,16 @@ async function buildListTasks({name, begin=1, end, tasks, ...params}) {
   return tasks.map(page=>Object.assign({}, params, {name, page}));
 }
 
-async function buildPageTasks({name, begin=0, end, tasks, ...params}) {
+/**
+ * Build page tasks
+ * @param {String} name - Leecher name
+ * @param {Number} begin - Begin index
+ * @param {Number} end - End index
+ * @param {Task[]} tasks - Syncholize tasks
+ * @param {Object[]} params - Params for each task
+ * @returns {Promise.<Array>}
+ */
+async function _buildPageTasks({name, begin=0, end, tasks, ...params}) {
   name = name.toUpperCase();
   if(!tasks || !tasks.length) {
     tasks = await (new Leecher(name)).loadPageIdsByRange(begin, end) || [];
@@ -65,7 +80,16 @@ async function buildPageTasks({name, begin=0, end, tasks, ...params}) {
   return tasks.map(pageId=>Object.assign({}, params, {name, pageId}));
 }
 
-async function buildSyncholizeTasks({name, begin = 0, end, tasks, ...params}) {
+/**
+ * Build standalone syncholize tasks
+ * @param {String} name - Leecher name
+ * @param {Number} begin - Begin index
+ * @param {Number} end - End index
+ * @param {Task[]} tasks - Syncholize tasks
+ * @param {Object[]} params - Params for each task
+ * @returns {Promise.<Array>}
+ */
+async function _buildSyncholizeTasks({name, begin = 0, end, tasks, ...params}) {
   name = name.toUpperCase();
   if(!tasks || !tasks.length) {
     tasks = await (new Leecher(name)).loadPageIdsByRange(begin, end) || [];
@@ -73,7 +97,13 @@ async function buildSyncholizeTasks({name, begin = 0, end, tasks, ...params}) {
   return tasks.map(pageId=>Object.assign({}, params, {name, pageId}));
 }
 
-async function publishTasks({type, task}) {
+/**
+ * Publish task to child executors
+ * @param {String} type - task type
+ * @param {Task} task - bulk task
+ * @returns {Promise.<boolean>}
+ */
+async function _publishTasks({type, task}) {
 
   if(!TaskType.hasOwnProperty(type)) {
     log.error(`invalid executor task type: \`${type}\``);
@@ -94,13 +124,13 @@ async function publishTasks({type, task}) {
 
     switch (task.type) {
       case LeechTaskType.ListTask:
-        executorTasks = await buildListTasks(task);
+        executorTasks = await _buildListTasks(task);
         break;
       case LeechTaskType.PageTask:
-        executorTasks = await buildPageTasks(task);
+        executorTasks = await _buildPageTasks(task);
         break;
       case LeechTaskType.SyncholizeTask:
-        executorTasks = await buildSyncholizeTasks(task);
+        executorTasks = await _buildSyncholizeTasks(task);
         break;
       default:
         log.error(`invalid leecher task type: \`${task.type}\``);
@@ -117,35 +147,62 @@ async function publishTasks({type, task}) {
   executor.dispatchTasks(type, executorTasks);
 }
 
-
-
-executor.initialize({
-  identifier:'Leecher',
-  task:{
-    invokerLimit:1,
-    factory:taskFactory
-  },
-  child:{
-    limit:20,
-    params:[],
-    modulePath:path.resolve(__dirname, './dispatcher.js')
+/**
+ * Empty task used to idling
+ */
+class _NopTask extends Task {
+  run() {
+    this.success();
   }
-},
-err=>{
-  executor.on(ExecutorEvent.dispose, (sender, resolve)=>{log.notice('dispose'); resolve();});
-  executor.on(ExecutorEvent.running,()=>{log.notice('running')});
-  executor.on(ExecutorEvent.exit,()=>{log.danger('exit')});
-  executor.on(ExecutorEvent.exiting,()=>{log.attention('try exit, wait for dispose')});
-  executor.on(ExecutorEvent.idle,()=>{log.notice('idle')});
-  executor.on(ExecutorEvent.error,(sender, error)=>{log.error(error)});
-  executor.on(ExecutorEvent.peer, onPeerMessage)
+}
 
-})
-.then(()=>{
-  log.on('log', (data)=>{ executor.emitSocket({event:'log', data}); });
+/**
+ * Factory to product idling tasks
+ */
+class _NopTaskFactory extends TaskFactory {
+  create(task) {
+    return new _NopTask();
+  }
+}
 
-  log.notice('initialized');
+/**
+ * Service entry
+ */
+function entry() {
 
-  executor.run();
+  const taskFactory = new _NopTaskFactory();
 
-});
+  executor.initialize({
+    identifier:'Leecher',
+    task:{
+      invokerLimit:1,
+      factory:taskFactory
+    },
+    child:{
+      limit:20,
+      params:[],
+      modulePath:path.resolve(__dirname, './dispatcher.js')
+    }
+  },
+  err=>{
+    executor.on(ExecutorEvent.dispose, (sender, resolve)=>{log.notice('dispose'); resolve();});
+    executor.on(ExecutorEvent.running,()=>{log.notice('running')});
+    executor.on(ExecutorEvent.exit,()=>{log.danger('exit')});
+    executor.on(ExecutorEvent.exiting,()=>{log.attention('try exit, wait for dispose')});
+    executor.on(ExecutorEvent.idle,()=>{log.notice('idle')});
+    executor.on(ExecutorEvent.error,(sender, error)=>{log.error(error)});
+    executor.on(ExecutorEvent.peer, _onPeerMessage)
+
+  })
+  .then(()=>{
+    log.on('log', (data)=>{ executor.emitSocket({event:'log', data}); });
+
+    log.notice('initialized');
+
+    executor.run();
+
+  });
+
+}
+
+entry();
